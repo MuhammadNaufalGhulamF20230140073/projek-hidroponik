@@ -14,6 +14,8 @@ export interface SystemControl {
   pump_state: boolean;
   target_ppm_min: number;
   target_ppm_max: number;
+  cooldown_minutes: number;
+  last_dosing_at?: string;
   updated_at?: string;
 }
 
@@ -35,4 +37,3 @@ export interface CalibrationParams {
   relayPin: number;
   tdsPin: number;
 }
-

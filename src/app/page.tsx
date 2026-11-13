@@ -37,6 +37,17 @@ export default function Home() {
     pump_state: false,
     target_ppm_min: 560.0,
     target_ppm_max: 840.0,
+    cooldown_minutes: 60,
+  });
+
+  const [cooldownInfo, setCooldownInfo] = useState<{
+    is_in_cooldown: boolean;
+    remaining_seconds: number;
+    remaining_minutes: number;
+  }>({
+    is_in_cooldown: false,
+    remaining_seconds: 0,
+    remaining_minutes: 0,
   });
 
   const [isDbActive, setIsDbActive] = useState(false);
@@ -66,6 +77,9 @@ export default function Home() {
         }
         if (json.control) {
           setControl(json.control);
+        }
+        if (json.cooldown) {
+          setCooldownInfo(json.cooldown);
         }
       } else {
         setIsOnline(false);
@@ -264,6 +278,7 @@ export default function Home() {
             <PumpControlPanel
               control={control}
               actualPumpActive={latestLog.status_pompa}
+              cooldownInfo={cooldownInfo}
               onUpdateControl={handleUpdateControl}
             />
             <CalibrationInfo />

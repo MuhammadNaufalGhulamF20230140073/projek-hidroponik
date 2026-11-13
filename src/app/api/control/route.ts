@@ -19,7 +19,7 @@ export async function GET() {
 
 /**
  * POST /api/control
- * Mengubah status mode ('auto' | 'manual'), saklar pompa, atau ambang batas PPM
+ * Mengubah mode, saklar pompa, ambang batas PPM, atau jeda cooldown
  */
 export async function POST(req: Request) {
   try {
@@ -28,12 +28,14 @@ export async function POST(req: Request) {
     const state = body.state !== undefined ? Boolean(body.state) : undefined;
     const target_ppm_min = body.target_ppm_min !== undefined ? Number(body.target_ppm_min) : undefined;
     const target_ppm_max = body.target_ppm_max !== undefined ? Number(body.target_ppm_max) : undefined;
+    const cooldown_minutes = body.cooldown_minutes !== undefined ? Number(body.cooldown_minutes) : undefined;
 
     const updated = await updatePumpControl({
       mode,
       state,
       target_ppm_min,
       target_ppm_max,
+      cooldown_minutes,
     });
 
     return NextResponse.json({

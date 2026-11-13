@@ -26,6 +26,8 @@ interface MockDB {
     pump_state: boolean;
     target_ppm_min: number;
     target_ppm_max: number;
+    cooldown_minutes: number;
+    last_dosing_at?: string;
     updated_at: string;
   };
 }
@@ -66,6 +68,7 @@ export const mockDB: MockDB = {
     pump_state: false,
     target_ppm_min: 560.0,
     target_ppm_max: 840.0,
+    cooldown_minutes: 60,
     updated_at: new Date().toISOString(),
   },
 };

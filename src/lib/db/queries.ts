@@ -19,7 +19,7 @@ async function executeQuery<T = any>(queryText: string, params: any[] = []): Pro
     }
   }
 
-  // Gunakan driver Neon serverless Pool (paling kompatibel dengan segala DATABASE_URL)
+  // Gunakan driver Neon serverless Pool
   const pool = new Pool({ connectionString: connStr });
   try {
     const res = await pool.query(queryText, params);
@@ -67,13 +67,23 @@ export async function initDatabase() {
         pump_state BOOLEAN NOT NULL DEFAULT false,
         target_ppm_min REAL NOT NULL DEFAULT 560.0,
         target_ppm_max REAL NOT NULL DEFAULT 840.0,
+        cooldown_minutes INTEGER NOT NULL DEFAULT 60,
+        last_dosing_at TIMESTAMP WITH TIME ZONE,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
     `);
 
+    // Pastikan kolom baru cooldown_minutes & last_dosing_at ada jika tabel sudah terbuat sebelumnya
     await executeQuery(`
-      INSERT INTO system_control (id, pump_mode, pump_state, target_ppm_min, target_ppm_max)
-      VALUES ('default', 'auto', false, 560.0, 840.0)
+      ALTER TABLE system_control ADD COLUMN IF NOT EXISTS cooldown_minutes INTEGER NOT NULL DEFAULT 60;
+    `);
+    await executeQuery(`
+      ALTER TABLE system_control ADD COLUMN IF NOT EXISTS last_dosing_at TIMESTAMP WITH TIME ZONE;
+    `);
+
+    await executeQuery(`
+      INSERT INTO system_control (id, pump_mode, pump_state, target_ppm_min, target_ppm_max, cooldown_minutes)
+      VALUES ('default', 'auto', false, 560.0, 840.0, 60)
       ON CONFLICT (id) DO NOTHING;
     `);
 
@@ -180,7 +190,7 @@ export async function getSystemControl(): Promise<SystemControl> {
 
   try {
     const rows = await executeQuery<SystemControl>(
-      `SELECT id, pump_mode, pump_state, target_ppm_min, target_ppm_max, updated_at
+      `SELECT id, pump_mode, pump_state, target_ppm_min, target_ppm_max, cooldown_minutes, last_dosing_at, updated_at
        FROM system_control
        WHERE id = 'default'
        LIMIT 1`
@@ -195,6 +205,7 @@ export async function getSystemControl(): Promise<SystemControl> {
       pump_state: false,
       target_ppm_min: 560.0,
       target_ppm_max: 840.0,
+      cooldown_minutes: 60,
     };
   } catch (error) {
     console.warn('Gagal membaca system_control:', error);
@@ -203,25 +214,31 @@ export async function getSystemControl(): Promise<SystemControl> {
 }
 
 /**
- * Memperbarui status kontrol pompa & batas ambang nutrisi dari Web Dashboard
+ * Memperbarui status kontrol pompa, batas ambang nutrisi, & jeda cooldown dari Web Dashboard
  */
 export async function updatePumpControl(params: {
   mode?: 'auto' | 'manual';
   state?: boolean;
   target_ppm_min?: number;
   target_ppm_max?: number;
+  cooldown_minutes?: number;
+  last_dosing_at?: string;
 }): Promise<SystemControl> {
   const current = await getSystemControl();
   const newMode = params.mode ?? current.pump_mode;
   const newState = params.state !== undefined ? params.state : current.pump_state;
   const newMin = params.target_ppm_min !== undefined ? params.target_ppm_min : current.target_ppm_min;
   const newMax = params.target_ppm_max !== undefined ? params.target_ppm_max : current.target_ppm_max;
+  const newCooldown = params.cooldown_minutes !== undefined ? params.cooldown_minutes : (current.cooldown_minutes || 60);
+  const newLastDosing = params.last_dosing_at !== undefined ? params.last_dosing_at : current.last_dosing_at;
 
   if (!isDbConfigured()) {
     mockDB.control.pump_mode = newMode;
     mockDB.control.pump_state = newState;
     mockDB.control.target_ppm_min = newMin;
     mockDB.control.target_ppm_max = newMax;
+    mockDB.control.cooldown_minutes = newCooldown;
+    if (newLastDosing) mockDB.control.last_dosing_at = newLastDosing;
     mockDB.control.updated_at = new Date().toISOString();
     return mockDB.control;
   }
@@ -232,10 +249,12 @@ export async function updatePumpControl(params: {
          pump_state = $2,
          target_ppm_min = $3,
          target_ppm_max = $4,
+         cooldown_minutes = $5,
+         last_dosing_at = COALESCE($6, last_dosing_at),
          updated_at = NOW()
      WHERE id = 'default'
-     RETURNING id, pump_mode, pump_state, target_ppm_min, target_ppm_max, updated_at`,
-    [newMode, newState, newMin, newMax]
+     RETURNING id, pump_mode, pump_state, target_ppm_min, target_ppm_max, cooldown_minutes, last_dosing_at, updated_at`,
+    [newMode, newState, newMin, newMax, newCooldown, newLastDosing || null]
   );
 
   return rows[0];
