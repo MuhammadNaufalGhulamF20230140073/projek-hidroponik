@@ -4,10 +4,12 @@ import { CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
 
 interface StatusBannerProps {
   ppm: number;
+  targetMin?: number;
+  targetMax?: number;
 }
 
-export function StatusBanner({ ppm }: StatusBannerProps) {
-  const { status, label, description } = getSolutionStatus(ppm);
+export function StatusBanner({ ppm, targetMin = 560, targetMax = 840 }: StatusBannerProps) {
+  const { status, label, description } = getSolutionStatus(ppm, targetMin, targetMax);
 
   const statusConfig = {
     optimal: {

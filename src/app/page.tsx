@@ -210,13 +210,19 @@ export default function Home() {
         {activeTab === 'dashboard' && (
           <div className="space-y-5">
             {/* Minimalist Status Strip */}
-            <StatusBanner ppm={latestLog.ppm_stabil} />
+            <StatusBanner 
+              ppm={latestLog.ppm_stabil} 
+              targetMin={control.target_ppm_min || 560} 
+              targetMax={control.target_ppm_max || 840} 
+            />
 
             {/* Core KPI Telemetry Deck */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <TDSMetricCard
                 ppmStabil={latestLog.ppm_stabil}
                 ppmRaw={latestLog.ppm_raw}
+                targetMin={control.target_ppm_min || 560}
+                targetMax={control.target_ppm_max || 840}
               />
               <VoltageCard
                 tegangan={latestLog.tegangan}

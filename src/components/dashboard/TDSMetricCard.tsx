@@ -6,10 +6,12 @@ import { getSolutionStatus } from '@/lib/utils/hydroCalc';
 interface TDSMetricCardProps {
   ppmStabil: number;
   ppmRaw: number;
+  targetMin?: number;
+  targetMax?: number;
 }
 
-export function TDSMetricCard({ ppmStabil, ppmRaw }: TDSMetricCardProps) {
-  const statusInfo = getSolutionStatus(ppmStabil);
+export function TDSMetricCard({ ppmStabil, ppmRaw, targetMin = 560, targetMax = 840 }: TDSMetricCardProps) {
+  const statusInfo = getSolutionStatus(ppmStabil, targetMin, targetMax);
   const percentage = Math.min(Math.max((ppmStabil / 1500) * 100, 0), 100);
   const delta = ppmStabil - ppmRaw;
 
@@ -56,14 +58,19 @@ export function TDSMetricCard({ ppmStabil, ppmRaw }: TDSMetricCardProps) {
       <div className="mt-4 space-y-1.5">
         <div className="flex justify-between font-mono text-[10px] text-zinc-400">
           <span>0</span>
-          <span className="text-emerald-600 dark:text-emerald-400">Target Range: 560 &ndash; 840 PPM</span>
+          <span className="text-emerald-600 dark:text-emerald-400">
+            Target Range: {targetMin} &ndash; {targetMax} PPM
+          </span>
           <span>1500</span>
         </div>
         <div className="relative h-2 w-full overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800">
           {/* Target Zone Highlight */}
           <div
             className="absolute top-0 bottom-0 bg-emerald-500/15 border-x border-emerald-500/30"
-            style={{ left: `${(560 / 1500) * 100}%`, width: `${((840 - 560) / 1500) * 100}%` }}
+            style={{ 
+              left: `${Math.min((targetMin / 1500) * 100, 100)}%`, 
+              width: `${Math.min((Math.max(targetMax - targetMin, 0) / 1500) * 100, 100)}%` 
+            }}
           />
           {/* Current Value Fill */}
           <div
