@@ -21,8 +21,8 @@
 // ============================================================================
 // 1. PENGATURAN WIFI & URL API VERCEL
 // ============================================================================
-const char* WIFI_SSID     = "NAMA_WIFI_ANDA";     // <-- Nama WiFi / Hotspot HP (2.4 GHz)
-const char* WIFI_PASSWORD = "PASSWORD_WIFI_ANDA"; // <-- Password WiFi Anda
+const char* WIFI_SSID     = "HGU-ARDHI";       // <-- SSID WiFi Anda
+const char* WIFI_PASSWORD = "aninardhi220505"; // <-- Password WiFi Anda
 
 // URL API Vercel resmi Anda:
 const char* VERCEL_API_URL = "https://projek-hidroponik-capstone2.vercel.app/api/sensor";
