@@ -69,17 +69,20 @@ const unsigned long INTERVAL_KIRIM_AUTO   = 4000; // Kirim data setiap 4 detik s
 const unsigned long INTERVAL_KIRIM_MANUAL = 2000; // Kirim data setiap 2 detik saat MANUAL agar sat-set!
 
 // ============================================================================
-// FUNGSI RELAY POMPA (AKTIF HIGH: HIGH = MENYALA/ON, LOW = MATI/OFF)
+// 6. PENGATURAN POLARITAS RELAY
 // ============================================================================
+// Atur true jika relay menyala saat sinyal HIGH (Active HIGH).
+// Ubah ke false jika modul relay Anda tipe Active LOW (menyala saat sinyal LOW).
+const bool RELAY_ACTIVE_HIGH = true;
+
 void kontrolPompa(bool status) {
   pompaAktif = status;
-  if (status) {
-    digitalWrite(RELAY_PIN, HIGH); // Relay MENYALA saat sinyal HIGH
-    Serial.println("[POMPA] Status: MENYALA (ON)");
-  } else {
-    digitalWrite(RELAY_PIN, LOW);  // Relay MATI saat sinyal LOW
-    Serial.println("[POMPA] Status: MATI (OFF)");
-  }
+  bool pinLevel = RELAY_ACTIVE_HIGH ? status : !status;
+  digitalWrite(RELAY_PIN, pinLevel ? HIGH : LOW);
+  Serial.printf("[POMPA] Status: %s | Pin %d: %s\n", 
+                status ? "MENYALA (ON)" : "MATI (OFF)", 
+                RELAY_PIN, 
+                pinLevel ? "HIGH" : "LOW");
 }
 
 // ============================================================================
