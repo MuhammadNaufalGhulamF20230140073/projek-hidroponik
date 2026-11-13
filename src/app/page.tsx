@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { SensorLog, SystemControl } from '@/lib/types/hidroponik';
 import { formatDateTime } from '@/lib/utils/hydroCalc';
-import { Database } from 'lucide-react';
+import { Database, Terminal, Shield, Clock } from 'lucide-react';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'control' | 'history'>('dashboard');
@@ -22,10 +22,10 @@ export default function Home() {
 
   // State data
   const [latestLog, setLatestLog] = useState<SensorLog>({
-    adc_raw: 1460,
-    tegangan: 1.176,
-    ppm_raw: 635.0,
-    ppm_stabil: 630.5,
+    adc_raw: 0,
+    tegangan: 0.0,
+    ppm_raw: 68.5,
+    ppm_stabil: 68.5,
     status_pompa: false,
     created_at: '',
   });
@@ -51,21 +51,20 @@ export default function Home() {
   });
 
   const [isDbActive, setIsDbActive] = useState(false);
-  const [isOnline, setIsOnline] = useState(false); // Default: Offline (Merah) sampai terbukti ada data masuk
+  const [isOnline, setIsOnline] = useState(false); // Default: Offline (Merah)
 
   // Fetch telemetry & history
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
 
-      // Fetch sensor terkini & kontrol
       const resSensor = await fetch('/api/sensor');
       if (resSensor.ok) {
         const json = await resSensor.json();
         if (json.data) {
           setLatestLog(json.data);
         }
-        // Gunakan heartbeat server (ESP32 kirim tiap 5s; jika >15s tidak ada data, OFFLINE/MERAH)
+        // Heartbeat verification (ESP32 sends every 5s; if >15s without packets -> OFFLINE)
         if (json.is_online !== undefined) {
           setIsOnline(Boolean(json.is_online));
         } else if (json.data?.created_at) {
@@ -85,35 +84,36 @@ export default function Home() {
         setIsOnline(false);
       }
 
-      // Fetch history untuk grafik
-      const resHist = await fetch('/api/history?limit=20');
+      const resHist = await fetch('/api/history?limit=30');
       if (resHist.ok) {
         const jsonHist = await resHist.json();
         if (jsonHist.data) {
           setHistory(jsonHist.data);
+          setIsDbActive(true);
         }
       }
     } catch (err) {
-      console.warn('Gagal memuat data:', err);
+      console.warn('Network sync error:', err);
       setIsOnline(false);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Polling berkala setiap 5 detik
+  // Polling loop
   useEffect(() => {
     fetchData();
     const timer = setInterval(fetchData, 5000);
     return () => clearInterval(timer);
   }, [fetchData]);
 
-  // Handle update kontrol pompa dari web
+  // Handle control update
   const handleUpdateControl = async (params: {
     mode?: 'auto' | 'manual';
     state?: boolean;
     target_ppm_min?: number;
     target_ppm_max?: number;
+    cooldown_minutes?: number;
   }) => {
     try {
       const res = await fetch('/api/control', {
@@ -126,17 +126,17 @@ export default function Home() {
         setControl(json.control);
       }
     } catch (err) {
-      console.error('Gagal memperbarui kontrol:', err);
+      console.error('Failed to update control:', err);
     }
   };
 
-  // Inisialisasi DB Vercel Postgres dengan 1-klik
+  // Re-run DB check
   const handleInitDb = async () => {
     try {
       setLoading(true);
       const res = await fetch('/api/init-db');
       const data = await res.json();
-      setDbInitMsg(data.message || 'Database siap');
+      setDbInitMsg(data.message || 'Database Ready');
       setIsDbActive(data.status === 'success');
       fetchData();
     } catch (err: any) {
@@ -147,9 +147,9 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50/60 p-4 font-sans text-zinc-900 transition-colors dark:bg-zinc-950 dark:text-zinc-50 md:p-8">
-      <div className="mx-auto max-w-6xl">
-        {/* Header Bersih & Navigasi Tab */}
+    <div className="min-h-screen bg-zinc-50 p-4 font-sans text-zinc-900 antialiased dark:bg-[#090a0b] dark:text-zinc-100 md:p-6 lg:p-8">
+      <div className="mx-auto max-w-6xl space-y-5">
+        {/* Top Header Command Bar */}
         <DashboardHeader
           lastUpdated={latestLog?.created_at}
           isOnline={isOnline}
@@ -160,14 +160,14 @@ export default function Home() {
           setActiveTab={setActiveTab}
         />
 
-        {/* TAB 1: DASHBOARD MONITORING */}
+        {/* TAB 1: TELEMETRY OVERVIEW */}
         {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            {/* Banner Status Nutrisi Hidroponik */}
+          <div className="space-y-5">
+            {/* Minimalist Status Strip */}
             <StatusBanner ppm={latestLog.ppm_stabil} />
 
-            {/* Grid Kartu Metrik Utama */}
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {/* Core KPI Telemetry Deck */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <TDSMetricCard
                 ppmStabil={latestLog.ppm_stabil}
                 ppmRaw={latestLog.ppm_raw}
@@ -178,88 +178,109 @@ export default function Home() {
               />
             </div>
 
-            {/* Quick Status Pompa & Mode */}
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+            {/* Actuator & Threshold Status Row */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 font-mono">
               <Card>
-                <span className="text-xs text-zinc-500">Status Relay Pompa</span>
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="text-xl font-bold">
-                    {latestLog.status_pompa ? 'AKTIF (ON)' : 'MATI (OFF)'}
+                <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">
+                  RELAY ACTUATOR [GPIO 23]
+                </div>
+                <div className="mt-2 flex items-baseline justify-between">
+                  <span className="text-xl font-bold tracking-tight">
+                    {latestLog.status_pompa ? 'ACTIVE (PUMP ON)' : 'IDLE (PUMP OFF)'}
                   </span>
-                  <Badge variant={latestLog.status_pompa ? 'success' : 'default'} dot={latestLog.status_pompa}>
-                    Pin 23
+                  <Badge variant={latestLog.status_pompa ? 'danger' : 'neutral'} dot={latestLog.status_pompa}>
+                    {latestLog.status_pompa ? 'LOW' : 'HIGH'}
                   </Badge>
                 </div>
               </Card>
 
               <Card>
-                <span className="text-xs text-zinc-500">Mode Kontrol</span>
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="text-xl font-bold uppercase">{control.pump_mode}</span>
-                  <Badge variant="info">
-                    {control.pump_mode === 'auto' ? 'Otomatis (Threshold PPM)' : 'Manual (Web Override)'}
+                <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">
+                  CONTROL PARADIGM
+                </div>
+                <div className="mt-2 flex items-baseline justify-between">
+                  <span className="text-xl font-bold tracking-tight uppercase">
+                    {control.pump_mode}
+                  </span>
+                  <Badge variant={control.pump_mode === 'auto' ? 'success' : 'neutral'}>
+                    {control.pump_mode === 'auto' ? 'CLOSED-LOOP' : 'MANUAL'}
                   </Badge>
                 </div>
               </Card>
 
               <Card>
-                <span className="text-xs text-zinc-500">Rentang Target Nutrisi (Threshold)</span>
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="text-xl font-bold">
-                    {control.target_ppm_min || 560} - {control.target_ppm_max || 840}
+                <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">
+                  TARGET WINDOW & COOLDOWN
+                </div>
+                <div className="mt-2 flex items-baseline justify-between">
+                  <span className="text-xl font-bold tracking-tight">
+                    {control.target_ppm_min || 560} &ndash; {control.target_ppm_max || 840}{' '}
+                    <span className="text-xs font-normal text-zinc-400">PPM</span>
                   </span>
-                  <span className="text-xs text-zinc-400">PPM Target</span>
+                  <Badge variant={cooldownInfo.is_in_cooldown ? 'warning' : 'neutral'}>
+                    {cooldownInfo.is_in_cooldown
+                      ? `REST: ~${cooldownInfo.remaining_minutes}m`
+                      : `${control.cooldown_minutes || 60}m CD`}
+                  </Badge>
                 </div>
               </Card>
             </div>
 
-            {/* Visualisasi Grafik Riwayat Tren PPM */}
-            <SensorChart data={history.length > 0 ? history : [latestLog]} />
+            {/* Rolling Time-Series Chart */}
+            <SensorChart
+              data={history.length > 0 ? history : [latestLog]}
+              targetMin={control.target_ppm_min || 560}
+              targetMax={control.target_ppm_max || 840}
+            />
 
-            {/* Cuplikan 5 Data Sensor Terakhir (Paling Baru di Atas) */}
+            {/* Recent Telemetry Stream (Latest on top) */}
             <Card
-              title="5 Data Sensor Terkini"
-              subtitle="Data paling baru yang diterima dari ESP32 (Urut dari yang paling atas)"
+              title="RECENT INCOMING TELEMETRY STREAM"
+              subtitle="Latest 5 sample packets received via HTTPS &bull; Newest on top"
             >
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-zinc-200 bg-zinc-50 font-semibold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400">
+                <table className="w-full text-left font-mono text-xs">
+                  <thead className="border-b border-zinc-200 bg-zinc-50/80 font-semibold text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400">
                     <tr>
-                      <th className="py-2 px-3">No</th>
-                      <th className="py-2 px-3">Waktu</th>
-                      <th className="py-2 px-3">ADC</th>
-                      <th className="py-2 px-3">Tegangan</th>
-                      <th className="py-2 px-3">PPM Stabil</th>
-                      <th className="py-2 px-3">Pompa</th>
+                      <th className="py-2 px-3">PACKET_ID</th>
+                      <th className="py-2 px-3">TIMESTAMP</th>
+                      <th className="py-2 px-3">ADC_RAW</th>
+                      <th className="py-2 px-3">VOLTAGE</th>
+                      <th className="py-2 px-3">PPM_RAW</th>
+                      <th className="py-2 px-3">PPM_FILTERED</th>
+                      <th className="py-2 px-3">RELAY</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/70">
                     {[...(history.length > 0 ? history : [latestLog])]
                       .reverse()
                       .slice(0, 5)
                       .map((log, idx) => (
                         <tr
                           key={idx}
-                          className={`hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 ${
-                            idx === 0 ? 'bg-emerald-500/5 font-semibold' : ''
+                          className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/40 ${
+                            idx === 0 ? 'bg-emerald-500/5 font-semibold text-zinc-950 dark:text-zinc-50' : 'text-zinc-600 dark:text-zinc-400'
                           }`}
                         >
-                          <td className="py-2 px-3 font-mono text-zinc-400">
-                            #{log.id ?? (history.length - idx)}
-                            {idx === 0 && (
-                              <span className="ml-2 inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" title="Paling Baru" />
-                            )}
+                          <td className="py-2 px-3">
+                            <span className="flex items-center gap-1.5">
+                              #{log.id ?? (history.length - idx)}
+                              {idx === 0 && (
+                                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              )}
+                            </span>
                           </td>
-                          <td className="py-2 px-3 font-mono text-zinc-500">
+                          <td className="py-2 px-3 text-zinc-500">
                             {formatDateTime(log.created_at)}
                           </td>
-                          <td className="py-2 px-3 font-mono">{log.adc_raw}</td>
-                          <td className="py-2 px-3 font-mono">{log.tegangan.toFixed(3)} V</td>
-                          <td className="py-2 px-3 font-mono text-emerald-600 dark:text-emerald-400">
-                            {log.ppm_stabil.toFixed(1)} ppm
+                          <td className="py-2 px-3">{log.adc_raw}</td>
+                          <td className="py-2 px-3">{log.tegangan.toFixed(3)} V</td>
+                          <td className="py-2 px-3">{log.ppm_raw.toFixed(1)}</td>
+                          <td className="py-2 px-3 text-emerald-600 dark:text-emerald-400 font-bold">
+                            {log.ppm_stabil.toFixed(1)}
                           </td>
                           <td className="py-2 px-3">
-                            <Badge variant={log.status_pompa ? 'success' : 'default'}>
+                            <Badge variant={log.status_pompa ? 'danger' : 'neutral'}>
                               {log.status_pompa ? 'ON' : 'OFF'}
                             </Badge>
                           </td>
@@ -272,9 +293,9 @@ export default function Home() {
           </div>
         )}
 
-        {/* TAB 2: KONTROL POMPA & AKTUATOR */}
+        {/* TAB 2: ACTUATOR & DOSING ENGINE */}
         {activeTab === 'control' && (
-          <div className="space-y-6">
+          <div className="space-y-5">
             <PumpControlPanel
               control={control}
               actualPumpActive={latestLog.status_pompa}
@@ -285,79 +306,80 @@ export default function Home() {
           </div>
         )}
 
-        {/* TAB 3: LOG RIWAYAT & KALIBRASI */}
+        {/* TAB 3: DATABASE LOG & CALIBRATION */}
         {activeTab === 'history' && (
-          <div className="space-y-6">
-            {/* Vercel Postgres Quick Initializer */}
+          <div className="space-y-5">
+            {/* Database Diagnostics */}
             <Card
-              title="Koneksi & Setup Vercel Postgres"
-              subtitle="Pastikan database Vercel Postgres sudah dikaitkan di Vercel Dashboard"
+              title="DATABASE STORAGE CONNECTOR"
+              subtitle="Vercel Postgres (Neon Serverless Pool)"
               action={
-                <Button size="sm" onClick={handleInitDb} loading={loading}>
-                  <Database className="h-3.5 w-3.5" />
-                  Inisialisasi Tabel DB
+                <Button size="sm" onClick={handleInitDb} loading={loading} className="font-mono text-xs h-7">
+                  <Database className="h-3 w-3" />
+                  INIT SCHEMA
                 </Button>
               }
             >
-              <div className="text-xs text-zinc-500">
+              <div className="text-xs font-mono text-zinc-500">
                 <p>
-                  Tabel <code>sensor_logs</code> dan <code>system_control</code> akan dibuat secara otomatis di Vercel Postgres / Neon.
+                  Schema Tables: <code>sensor_logs</code> (telemetry time-series) &bull;{' '}
+                  <code>system_control</code> (actuator setpoints & cooldown timers).
                 </p>
                 {dbInitMsg && (
                   <p className="mt-2 font-mono text-emerald-600 dark:text-emerald-400">
-                    {dbInitMsg}
+                    &gt; {dbInitMsg}
                   </p>
                 )}
               </div>
             </Card>
 
-            {/* Tabel Log Riwayat (Data Terbaru di Atas) */}
+            {/* Complete Historical Table */}
             <Card
-              title="Tabel Log Telemetri ESP32"
-              subtitle="Data pembacaan realtime (Data terbaru di urutan paling atas)"
+              title="TELEMETRY ARCHIVE (POSTGRES LOGS)"
+              subtitle="Chronological audit trail of all sensor transmissions &bull; Newest first"
             >
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-zinc-200 bg-zinc-50 font-semibold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400">
+              <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                <table className="w-full text-left font-mono text-xs">
+                  <thead className="sticky top-0 border-b border-zinc-200 bg-zinc-50 font-semibold text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/90 dark:text-zinc-400">
                     <tr>
-                      <th className="py-2.5 px-3">No / ID</th>
-                      <th className="py-2.5 px-3">Waktu</th>
-                      <th className="py-2.5 px-3">ADC RAW</th>
-                      <th className="py-2.5 px-3">Tegangan</th>
-                      <th className="py-2.5 px-3">PPM RAW</th>
-                      <th className="py-2.5 px-3">PPM Stabil</th>
-                      <th className="py-2.5 px-3">Status Pompa</th>
+                      <th className="py-2 px-3">ID</th>
+                      <th className="py-2 px-3">TIMESTAMP</th>
+                      <th className="py-2 px-3">ADC</th>
+                      <th className="py-2 px-3">VOLT</th>
+                      <th className="py-2 px-3">PPM_RAW</th>
+                      <th className="py-2 px-3">PPM_STABIL</th>
+                      <th className="py-2 px-3">RELAY</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/70">
                     {[...(history.length > 0 ? history : [latestLog])].reverse().map((log, idx) => (
                       <tr
                         key={idx}
-                        className={`hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 ${
-                          idx === 0 ? 'bg-emerald-500/5 font-medium' : ''
+                        className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/30 ${
+                          idx === 0 ? 'bg-emerald-500/5 font-semibold text-zinc-950 dark:text-zinc-50' : 'text-zinc-600 dark:text-zinc-400'
                         }`}
                       >
-                        <td className="py-2 px-3 font-mono text-zinc-400">
+                        <td className="py-1.5 px-3">
                           <span className="flex items-center gap-1.5">
                             #{log.id ?? (history.length - idx)}
                             {idx === 0 && (
-                              <Badge variant="success" className="text-[10px] py-0 px-1.5">
-                                Terbaru
+                              <Badge variant="success" className="text-[9px] py-0 px-1">
+                                LATEST
                               </Badge>
                             )}
                           </span>
                         </td>
-                        <td className="py-2 px-3 font-mono text-zinc-500">
+                        <td className="py-1.5 px-3 text-zinc-500">
                           {formatDateTime(log.created_at)}
                         </td>
-                        <td className="py-2 px-3 font-mono">{log.adc_raw}</td>
-                        <td className="py-2 px-3 font-mono">{log.tegangan.toFixed(3)} V</td>
-                        <td className="py-2 px-3 font-mono">{log.ppm_raw.toFixed(1)}</td>
-                        <td className="py-2 px-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        <td className="py-1.5 px-3">{log.adc_raw}</td>
+                        <td className="py-1.5 px-3">{log.tegangan.toFixed(3)} V</td>
+                        <td className="py-1.5 px-3">{log.ppm_raw.toFixed(1)}</td>
+                        <td className="py-1.5 px-3 font-bold text-emerald-600 dark:text-emerald-400">
                           {log.ppm_stabil.toFixed(1)}
                         </td>
-                        <td className="py-2 px-3">
-                          <Badge variant={log.status_pompa ? 'success' : 'default'}>
+                        <td className="py-1.5 px-3">
+                          <Badge variant={log.status_pompa ? 'danger' : 'neutral'}>
                             {log.status_pompa ? 'ON' : 'OFF'}
                           </Badge>
                         </td>
@@ -372,9 +394,9 @@ export default function Home() {
           </div>
         )}
 
-        {/* Footer */}
-        <footer className="mt-12 border-t border-zinc-200/80 pt-6 text-center text-xs text-zinc-400 dark:border-zinc-800">
-          Hydroponic Monitoring System • Next.js & Vercel Postgres Serverless • ESP32 IoT
+        {/* Minimal Engineering Footer */}
+        <footer className="border-t border-zinc-200/80 pt-4 text-center font-mono text-[11px] text-zinc-400 dark:border-zinc-800/80">
+          HYDRO//LAB &bull; Next.js 16 (Turbopack) &bull; Vercel Serverless &bull; Neon Postgres &bull; ESP32 IoT
         </footer>
       </div>
     </div>

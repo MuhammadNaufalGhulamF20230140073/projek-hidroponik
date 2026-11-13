@@ -1,57 +1,59 @@
 import React from 'react';
 import { Card } from '../ui/Card';
+import { Badge } from '../ui/Badge';
 import { ARDUINO_CALIBRATION } from '@/lib/utils/hydroCalc';
-import { Settings2, Cpu, Hash, Activity } from 'lucide-react';
+import { Cpu, Terminal, Sliders } from 'lucide-react';
 
 export function CalibrationInfo() {
   const p = ARDUINO_CALIBRATION;
 
   return (
     <Card
-      title="Parameter Kalibrasi & Filter (Firmware Arduino)"
-      subtitle="Nilai koefisien yang aktif pada ESP32"
+      title="FIRMWARE CALIBRATION & ADC POLYNOMIAL MODEL"
+      subtitle="Embedded Coefficients on ESP32 Core"
+      action={<Badge variant="neutral">CAL_PROFILE: 500/1000PPM</Badge>}
     >
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-xl border border-zinc-200/80 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
-          <span className="text-[11px] text-zinc-500">Calibration Factor</span>
-          <p className="mt-1 font-mono text-base font-bold text-zinc-900 dark:text-zinc-100">
-            {p.calibrationFactor}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 font-mono">
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-800/40">
+          <span className="text-[10px] uppercase text-zinc-400 block tracking-wider">Calibration Factor</span>
+          <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-zinc-100">
+            {p.calibrationFactor.toFixed(4)}
           </p>
         </div>
 
-        <div className="rounded-xl border border-zinc-200/80 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
-          <span className="text-[11px] text-zinc-500">Calibration Slope</span>
-          <p className="mt-1 font-mono text-base font-bold text-zinc-900 dark:text-zinc-100">
-            {p.calibrationSlope}
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-800/40">
+          <span className="text-[10px] uppercase text-zinc-400 block tracking-wider">Slope Multiplier</span>
+          <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-zinc-100">
+            {p.calibrationSlope.toFixed(4)}
           </p>
         </div>
 
-        <div className="rounded-xl border border-zinc-200/80 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
-          <span className="text-[11px] text-zinc-500">Calibration Offset</span>
-          <p className="mt-1 font-mono text-base font-bold text-zinc-900 dark:text-zinc-100">
-            +{p.calibrationOffset}
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-800/40">
+          <span className="text-[10px] uppercase text-zinc-400 block tracking-wider">Zero Offset</span>
+          <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-zinc-100">
+            +{p.calibrationOffset.toFixed(2)} <span className="text-[10px] font-normal text-zinc-400">ppm</span>
           </p>
         </div>
 
-        <div className="rounded-xl border border-zinc-200/80 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
-          <span className="text-[11px] text-zinc-500">EMA Filter Alpha</span>
-          <p className="mt-1 font-mono text-base font-bold text-zinc-900 dark:text-zinc-100">
-            {p.emaAlpha}
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-800/40">
+          <span className="text-[10px] uppercase text-zinc-400 block tracking-wider">EMA Filter Alpha</span>
+          <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-zinc-100">
+            {p.emaAlpha.toFixed(2)} <span className="text-[10px] font-normal text-zinc-400">/ 10 smp</span>
           </p>
         </div>
       </div>
 
-      <div className="mt-4 rounded-xl border border-zinc-200/60 bg-zinc-100/50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-800/30">
-        <p className="font-semibold text-zinc-700 dark:text-zinc-300">Rumus Konversi TDS (ESP32):</p>
-        <code className="mt-1 block font-mono text-[11px] text-zinc-600 dark:text-zinc-400">
-          compensationCoefficient = 1.0 + 0.02 * (T - 25.0)
+      {/* Mathematical transfer function formula */}
+      <div className="mt-3.5 rounded-lg border border-zinc-200/90 bg-zinc-100/70 p-3 font-mono text-[11px] text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
+        <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 mb-1">Transfer Function (C++ Embedded):</div>
+        <p className="leading-relaxed">
+          k_temp = 1.0 + 0.02 * (T - 25.0) &bull; V_comp = V_raw / k_temp
           <br />
-          tdsRaw = (133.42 * Vc³ - 255.86 * Vc² + 857.39 * Vc) * 0.5
+          tds_raw = (133.42 * Vc&sup3; - 255.86 * Vc&sup2; + 857.39 * Vc) * 0.5
           <br />
-          ppm = (0.9200 * (tdsRaw * 0.9344)) + 68.50
-        </code>
+          PPM = (0.9200 * (tds_raw * 0.9344)) + 68.50
+        </p>
       </div>
     </Card>
   );
 }
-
