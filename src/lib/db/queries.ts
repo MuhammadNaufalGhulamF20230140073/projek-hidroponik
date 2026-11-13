@@ -203,15 +203,25 @@ export async function getSystemControl(): Promise<SystemControl> {
 }
 
 /**
- * Memperbarui status kontrol pompa dari Web Dashboard
+ * Memperbarui status kontrol pompa & batas ambang nutrisi dari Web Dashboard
  */
-export async function updatePumpControl(
-  mode: 'auto' | 'manual',
-  state: boolean
-): Promise<SystemControl> {
+export async function updatePumpControl(params: {
+  mode?: 'auto' | 'manual';
+  state?: boolean;
+  target_ppm_min?: number;
+  target_ppm_max?: number;
+}): Promise<SystemControl> {
+  const current = await getSystemControl();
+  const newMode = params.mode ?? current.pump_mode;
+  const newState = params.state !== undefined ? params.state : current.pump_state;
+  const newMin = params.target_ppm_min !== undefined ? params.target_ppm_min : current.target_ppm_min;
+  const newMax = params.target_ppm_max !== undefined ? params.target_ppm_max : current.target_ppm_max;
+
   if (!isDbConfigured()) {
-    mockDB.control.pump_mode = mode;
-    mockDB.control.pump_state = state;
+    mockDB.control.pump_mode = newMode;
+    mockDB.control.pump_state = newState;
+    mockDB.control.target_ppm_min = newMin;
+    mockDB.control.target_ppm_max = newMax;
     mockDB.control.updated_at = new Date().toISOString();
     return mockDB.control;
   }
@@ -220,10 +230,12 @@ export async function updatePumpControl(
     `UPDATE system_control
      SET pump_mode = $1,
          pump_state = $2,
+         target_ppm_min = $3,
+         target_ppm_max = $4,
          updated_at = NOW()
      WHERE id = 'default'
      RETURNING id, pump_mode, pump_state, target_ppm_min, target_ppm_max, updated_at`,
-    [mode, state]
+    [newMode, newState, newMin, newMax]
   );
 
   return rows[0];

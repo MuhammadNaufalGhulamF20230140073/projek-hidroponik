@@ -22,13 +22,13 @@ export async function GET() {
  * POST /api/sensor
  * Menerima payload telemetri dari ESP32
  * ESP32 mengirim: { adcRaw, teganganRaw, ppmRaw, ppmStabil, pompaAktif }
- * Mengembalikan: { success: true, pump_mode, pump_state } (instruksi aktuasi balik ke ESP32)
+ * Mengembalikan: { success: true, control: { mode, state, target_ppm_min, target_ppm_max } }
  */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // Normalisasi parameter (mendukung camelCase maupun snake_case dari ESP32)
+    // Normalisasi parameter
     const adc_raw = Number(body.adcRaw ?? body.adc_raw ?? 0);
     const tegangan = Number(body.teganganRaw ?? body.tegangan ?? 0);
     const ppm_raw = Number(body.ppmRaw ?? body.ppm_raw ?? 0);
@@ -53,8 +53,10 @@ export async function POST(req: Request) {
       saved_id: savedLog.id,
       // Respon instruksi kontrol untuk ESP32
       control: {
-        mode: control.pump_mode,   // 'auto' atau 'manual'
-        state: control.pump_state, // true (ON / LOW pin) atau false (OFF / HIGH pin)
+        mode: control.pump_mode,                     // 'auto' atau 'manual'
+        state: control.pump_state,                   // status manual ON/OFF
+        target_ppm_min: Number(control.target_ppm_min || 560), // ambang batas bawah
+        target_ppm_max: Number(control.target_ppm_max || 840), // ambang batas atas
       },
     });
   } catch (error: any) {
@@ -65,4 +67,3 @@ export async function POST(req: Request) {
     );
   }
 }
-

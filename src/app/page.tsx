@@ -87,12 +87,17 @@ export default function Home() {
   }, [fetchData]);
 
   // Handle update kontrol pompa dari web
-  const handleUpdateControl = async (mode: 'auto' | 'manual', state: boolean) => {
+  const handleUpdateControl = async (params: {
+    mode?: 'auto' | 'manual';
+    state?: boolean;
+    target_ppm_min?: number;
+    target_ppm_max?: number;
+  }) => {
     try {
       const res = await fetch('/api/control', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, state }),
+        body: JSON.stringify(params),
       });
       if (res.ok) {
         const json = await res.json();
@@ -170,16 +175,18 @@ export default function Home() {
                 <div className="mt-2 flex items-center justify-between">
                   <span className="text-xl font-bold uppercase">{control.pump_mode}</span>
                   <Badge variant="info">
-                    {control.pump_mode === 'auto' ? 'Timer 5s ESP32' : 'Override Web'}
+                    {control.pump_mode === 'auto' ? 'Otomatis (Threshold PPM)' : 'Manual (Web Override)'}
                   </Badge>
                 </div>
               </Card>
 
               <Card>
-                <span className="text-xs text-zinc-500">Rentang Target Nutrisi</span>
+                <span className="text-xs text-zinc-500">Rentang Target Nutrisi (Threshold)</span>
                 <div className="mt-2 flex items-center justify-between">
-                  <span className="text-xl font-bold">560 - 840</span>
-                  <span className="text-xs text-zinc-400">PPM Selada/Sayur</span>
+                  <span className="text-xl font-bold">
+                    {control.target_ppm_min || 560} - {control.target_ppm_max || 840}
+                  </span>
+                  <span className="text-xs text-zinc-400">PPM Target</span>
                 </div>
               </Card>
             </div>

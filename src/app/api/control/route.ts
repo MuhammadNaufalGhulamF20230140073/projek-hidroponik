@@ -19,19 +19,26 @@ export async function GET() {
 
 /**
  * POST /api/control
- * Mengubah status mode ('auto' | 'manual') atau saklar pompa dari Web Dashboard
+ * Mengubah status mode ('auto' | 'manual'), saklar pompa, atau ambang batas PPM
  */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const mode = body.mode === 'manual' ? 'manual' : 'auto';
-    const state = Boolean(body.state);
+    const mode = body.mode !== undefined ? (body.mode === 'manual' ? 'manual' : 'auto') : undefined;
+    const state = body.state !== undefined ? Boolean(body.state) : undefined;
+    const target_ppm_min = body.target_ppm_min !== undefined ? Number(body.target_ppm_min) : undefined;
+    const target_ppm_max = body.target_ppm_max !== undefined ? Number(body.target_ppm_max) : undefined;
 
-    const updated = await updatePumpControl(mode, state);
+    const updated = await updatePumpControl({
+      mode,
+      state,
+      target_ppm_min,
+      target_ppm_max,
+    });
 
     return NextResponse.json({
       success: true,
-      message: `Kontrol berhasil diperbarui: Mode ${mode}, Pompa ${state ? 'ON' : 'OFF'}`,
+      message: 'Konfigurasi kontrol berhasil diperbarui',
       control: updated,
     });
   } catch (error: any) {
@@ -41,4 +48,3 @@ export async function POST(req: Request) {
     );
   }
 }
-

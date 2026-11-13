@@ -2,10 +2,14 @@
  ==============================================================================
  PROJEK HIDROPONIK IOT: ESP32 + SENSOR TDS + RELAY POMPA + VERCEL API
  ==============================================================================
- Catatan Penting WiFi ESP32:
- - ESP32 HANYA mendukung frekuensi WiFi 2.4 GHz (TIDAK mendukung 5 GHz).
- - Jika menggunakan Hotspot HP, aktifkan opsi "Maximize Compatibility" / "2.4 GHz Band".
- - Pastikan huruf besar/kecil (Caps Lock) SSID dan Password tepat.
+ LOGIKA KONTROL POMPA CERDAS (SMART HYDROPONIC):
+ 1. Mode OTOMATIS (AUTO):
+    - Pompa dikontrol berdasarkan batas ambang nutrisi PPM (Threshold).
+    - Jika PPM < Batas Min (default 560 PPM) -> Pompa Otomatis NYALA (ON).
+    - Jika PPM >= Batas Max (default 840 PPM) -> Pompa Otomatis MATI (OFF).
+    - Nilai batas ambang PPM dapat diubah langsung dari Web Dashboard!
+ 2. Mode MANUAL:
+    - Pompa dikontrol langsung lewat tombol Saklar ON/OFF di Web Dashboard.
  ==============================================================================
 */
 
@@ -14,9 +18,9 @@
 #include <WiFiClientSecure.h>
 
 // ============================================================================
-// 1. PENGATURAN WIFI & URL API VERCEL (PERIKSA DENGAN TELITI)
+// 1. PENGATURAN WIFI & URL API VERCEL
 // ============================================================================
-const char* WIFI_SSID     = "NAMA_WIFI_ANDA";     // <-- Nama WiFi / Hotspot 2.4 GHz
+const char* WIFI_SSID     = "NAMA_WIFI_ANDA";     // <-- Nama WiFi / Hotspot HP (2.4 GHz)
 const char* WIFI_PASSWORD = "PASSWORD_WIFI_ANDA"; // <-- Password WiFi Anda
 
 // URL API Vercel resmi Anda:
@@ -47,16 +51,15 @@ float ppmFiltered = 0;
 bool filterReady  = false;
 
 // ============================================================================
-// 5. PENGATURAN TIMER
+// 5. PENGATURAN MODE & AMBANG BATAS NUTRISI (SYNC DARI WEB)
 // ============================================================================
-unsigned long waktuPompa = 0;
-const unsigned long INTERVAL_POMPA = 5000; // Siklus 5 detik saat mode AUTO
-
-unsigned long waktuKirim = 0;
-const unsigned long INTERVAL_KIRIM = 5000; // Kirim data ke Vercel setiap 5 detik
+String modeOperasi   = "auto"; // "auto" (threshold PPM) atau "manual" (tombol web)
+float targetPpmMin   = 560.0;  // Ambang batas bawah (Jika PPM < 560, Pompa ON)
+float targetPpmMax   = 840.0;  // Ambang batas atas (Jika PPM >= 840, Pompa OFF)
 
 bool pompaAktif = false;
-String modeOperasi = "auto";
+unsigned long waktuKirim = 0;
+const unsigned long INTERVAL_KIRIM = 5000; // Kirim data ke Vercel setiap 5 detik
 
 // ============================================================================
 // FUNGSI RELAY POMPA (AKTIF LOW)
@@ -64,10 +67,10 @@ String modeOperasi = "auto";
 void kontrolPompa(bool status) {
   pompaAktif = status;
   if (status) {
-    digitalWrite(RELAY_PIN, LOW); // Relay ON
+    digitalWrite(RELAY_PIN, LOW); // Relay ON saat logika LOW
     Serial.println("[POMPA] Status: AKTIF (ON)");
   } else {
-    digitalWrite(RELAY_PIN, HIGH); // Relay OFF
+    digitalWrite(RELAY_PIN, HIGH); // Relay OFF saat logika HIGH
     Serial.println("[POMPA] Status: MATI (OFF)");
   }
 }
@@ -90,16 +93,16 @@ float hitungPPM(float tegangan) {
 }
 
 // ============================================================================
-// FUNGSI SINKRONISASI KE VERCEL (HTTPS)
+// FUNGSI SINKRONISASI KE VERCEL (HTTPS) & MENERIMA PERINTAH KONTROL
 // ============================================================================
 void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmStabil, bool statusPompa) {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[WIFI] Status: Belum terhubung ke internet. Menunggu koneksi...");
+    Serial.println("[WIFI] Sedang menunggu koneksi WiFi...");
     return;
   }
 
   WiFiClientSecure client;
-  client.setInsecure(); // Bypass SSL verification di mikrokontroler
+  client.setInsecure(); // Bypass SSL cert di mikrokontroler
 
   HTTPClient http;
   if (!http.begin(client, VERCEL_API_URL)) {
@@ -118,24 +121,48 @@ void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmSta
   jsonPayload += "\"pompaAktif\":" + String(statusPompa ? "true" : "false");
   jsonPayload += "}";
 
-  Serial.println("[HTTP] Mengirim data telemetri ke Vercel...");
+  Serial.println("[HTTP] Mengirim telemetri ke Vercel...");
   int httpCode = http.POST(jsonPayload);
 
   if (httpCode > 0) {
     String response = http.getString();
     Serial.printf("[HTTP] Sukses (%d): %s\n", httpCode, response.c_str());
 
-    // Cek respon instruksi kontrol dari Web
+    // 1. Parsing Mode Operasi ('auto' vs 'manual')
     if (response.indexOf("\"mode\":\"manual\"") != -1) {
       modeOperasi = "manual";
     } else if (response.indexOf("\"mode\":\"auto\"") != -1) {
       modeOperasi = "auto";
     }
 
+    // 2. Parsing Ambang Batas Nutrisi (target_ppm_min & target_ppm_max)
+    int idxMin = response.indexOf("\"target_ppm_min\":");
+    if (idxMin != -1) {
+      int startIdx = idxMin + 17;
+      int endIdx = response.indexOf(",", startIdx);
+      if (endIdx == -1) endIdx = response.indexOf("}", startIdx);
+      if (endIdx != -1) {
+        float val = response.substring(startIdx, endIdx).toFloat();
+        if (val > 0) targetPpmMin = val;
+      }
+    }
+
+    int idxMax = response.indexOf("\"target_ppm_max\":");
+    if (idxMax != -1) {
+      int startIdx = idxMax + 17;
+      int endIdx = response.indexOf(",", startIdx);
+      if (endIdx == -1) endIdx = response.indexOf("}", startIdx);
+      if (endIdx != -1) {
+        float val = response.substring(startIdx, endIdx).toFloat();
+        if (val > 0) targetPpmMax = val;
+      }
+    }
+
+    // 3. Jika mode MANUAL: Eksekusi tombol Saklar Web langsung
     if (modeOperasi == "manual") {
       bool serverPumpState = (response.indexOf("\"state\":true") != -1);
       if (pompaAktif != serverPumpState) {
-        Serial.printf("[KONTROL] Override dari Web: Pompa -> %s\n", serverPumpState ? "ON" : "OFF");
+        Serial.printf("[KONTROL MANUAL] Saklar Web: Pompa -> %s\n", serverPumpState ? "ON" : "OFF");
         kontrolPompa(serverPumpState);
       }
     }
@@ -165,15 +192,14 @@ void setup() {
   Serial.println("=========================================");
   Serial.println("   SISTEM MONITORING HIDROPONIK ESP32    ");
   Serial.println("=========================================");
-  Serial.printf("Menghubungkan ke WiFi SSID: %s\n", WIFI_SSID);
+  Serial.printf("Menghubungkan ke WiFi: %s\n", WIFI_SSID);
 
   // 3. Konfigurasi WiFi
   WiFi.mode(WIFI_STA);
-  WiFi.setAutoReconnect(true); // Biarkan ESP32 otomatis menyambung ulang di background
+  WiFi.setAutoReconnect(true);
   WiFi.persistent(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-  // Tunggu koneksi hingga 40 detik
   int attempt = 0;
   while (WiFi.status() != WL_CONNECTED && attempt < 40) {
     delay(500);
@@ -186,10 +212,7 @@ void setup() {
     Serial.print("[WIFI] IP ESP32: ");
     Serial.println(WiFi.localIP());
   } else {
-    Serial.println("\n[WIFI] Gagal terhubung di awal. Pastikan:");
-    Serial.println(" 1. WiFi menggunakan frekuensi 2.4 GHz (ESP32 tidak bisa 5 GHz)");
-    Serial.println(" 2. SSID dan Password tidak salah ketik (perhatikan huruf besar/kecil)");
-    Serial.println("ESP32 akan terus mencoba menyambung di background sambil membaca sensor.");
+    Serial.println("\n[WIFI] Belum terhubung. Pastikan WiFi 2.4 GHz dan SSID/Password benar.");
   }
 }
 
@@ -226,15 +249,24 @@ void loop() {
     ppmFiltered = (EMA_ALPHA * ppmAverage) + ((1.0 - EMA_ALPHA) * ppmFiltered);
   }
 
-  // 7. Kontrol Otomatis Pompa (Hanya jika mode = AUTO)
-  unsigned long sekarang = millis();
+  // 7. KONTROL POMPA CERDAS:
   if (modeOperasi == "auto") {
-    if (sekarang - waktuPompa >= INTERVAL_POMPA) {
-      waktuPompa = sekarang;
-      pompaAktif = !pompaAktif;
-      kontrolPompa(pompaAktif);
+    // Mode OTOMATIS: Berdasarkan Ambang Batas Nutrisi (Threshold PPM)
+    if (ppmFiltered < targetPpmMin) {
+      // Jika PPM di bawah ambang batas minimum, pompa aktif untuk mensirkulasikan nutrisi
+      if (!pompaAktif) {
+        Serial.printf("[AUTO] PPM (%.1f) < Min (%.1f) -> NYALAKAN POMPA\n", ppmFiltered, targetPpmMin);
+        kontrolPompa(true);
+      }
+    } else if (ppmFiltered >= targetPpmMax) {
+      // Jika PPM sudah mencapai target optimal/maksimum, matikan pompa
+      if (pompaAktif) {
+        Serial.printf("[AUTO] PPM (%.1f) >= Max (%.1f) -> MATIKAN POMPA\n", ppmFiltered, targetPpmMax);
+        kontrolPompa(false);
+      }
     }
   }
+  // Catatan: Jika mode MANUAL, saklar pompa sepenuhnya mengikuti tombol dari Web Vercel
 
   // 8. Tampilkan data ke Serial Monitor
   Serial.print("[SENSOR] ADC: ");
@@ -248,9 +280,14 @@ void loop() {
   Serial.print(" ppm | Pompa: ");
   Serial.print(pompaAktif ? "ON" : "OFF");
   Serial.print(" | Mode: ");
-  Serial.println(modeOperasi);
+  Serial.print(modeOperasi);
+  if (modeOperasi == "auto") {
+    Serial.printf(" [Target: %.0f - %.0f PPM]", targetPpmMin, targetPpmMax);
+  }
+  Serial.println();
 
   // 9. Kirim data telemetri ke API Vercel setiap 5 detik
+  unsigned long sekarang = millis();
   if (sekarang - waktuKirim >= INTERVAL_KIRIM) {
     waktuKirim = sekarang;
     kirimDataKeVercel(adcRaw, teganganAverage, ppmRaw, ppmFiltered, pompaAktif);
