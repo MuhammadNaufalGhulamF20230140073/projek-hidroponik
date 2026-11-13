@@ -186,6 +186,60 @@ export default function Home() {
 
             {/* Visualisasi Grafik Riwayat Tren PPM */}
             <SensorChart data={history.length > 0 ? history : [latestLog]} />
+
+            {/* Cuplikan 5 Data Sensor Terakhir (Paling Baru di Atas) */}
+            <Card
+              title="5 Data Sensor Terkini"
+              subtitle="Data paling baru yang diterima dari ESP32 (Urut dari yang paling atas)"
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-zinc-200 bg-zinc-50 font-semibold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400">
+                    <tr>
+                      <th className="py-2 px-3">No</th>
+                      <th className="py-2 px-3">Waktu</th>
+                      <th className="py-2 px-3">ADC</th>
+                      <th className="py-2 px-3">Tegangan</th>
+                      <th className="py-2 px-3">PPM Stabil</th>
+                      <th className="py-2 px-3">Pompa</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {[...(history.length > 0 ? history : [latestLog])]
+                      .reverse()
+                      .slice(0, 5)
+                      .map((log, idx) => (
+                        <tr
+                          key={idx}
+                          className={`hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 ${
+                            idx === 0 ? 'bg-emerald-500/5 font-semibold' : ''
+                          }`}
+                        >
+                          <td className="py-2 px-3 font-mono text-zinc-400">
+                            #{log.id ?? (history.length - idx)}
+                            {idx === 0 && (
+                              <span className="ml-2 inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" title="Paling Baru" />
+                            )}
+                          </td>
+                          <td className="py-2 px-3 font-mono text-zinc-500">
+                            {formatDateTime(log.created_at)}
+                          </td>
+                          <td className="py-2 px-3 font-mono">{log.adc_raw}</td>
+                          <td className="py-2 px-3 font-mono">{log.tegangan.toFixed(3)} V</td>
+                          <td className="py-2 px-3 font-mono text-emerald-600 dark:text-emerald-400">
+                            {log.ppm_stabil.toFixed(1)} ppm
+                          </td>
+                          <td className="py-2 px-3">
+                            <Badge variant={log.status_pompa ? 'success' : 'default'}>
+                              {log.status_pompa ? 'ON' : 'OFF'}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </div>
         )}
 
@@ -227,15 +281,16 @@ export default function Home() {
               </div>
             </Card>
 
-            {/* Tabel Log Riwayat */}
+            {/* Tabel Log Riwayat (Data Terbaru di Atas) */}
             <Card
               title="Tabel Log Telemetri ESP32"
-              subtitle="Data pembacaan realtime yang tersimpan di database"
+              subtitle="Data pembacaan realtime (Data terbaru di urutan paling atas)"
             >
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="border-b border-zinc-200 bg-zinc-50 font-semibold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400">
                     <tr>
+                      <th className="py-2.5 px-3">No / ID</th>
                       <th className="py-2.5 px-3">Waktu</th>
                       <th className="py-2.5 px-3">ADC RAW</th>
                       <th className="py-2.5 px-3">Tegangan</th>
@@ -245,8 +300,23 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    {(history.length > 0 ? history : [latestLog]).map((log, idx) => (
-                      <tr key={idx} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30">
+                    {[...(history.length > 0 ? history : [latestLog])].reverse().map((log, idx) => (
+                      <tr
+                        key={idx}
+                        className={`hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 ${
+                          idx === 0 ? 'bg-emerald-500/5 font-medium' : ''
+                        }`}
+                      >
+                        <td className="py-2 px-3 font-mono text-zinc-400">
+                          <span className="flex items-center gap-1.5">
+                            #{log.id ?? (history.length - idx)}
+                            {idx === 0 && (
+                              <Badge variant="success" className="text-[10px] py-0 px-1.5">
+                                Terbaru
+                              </Badge>
+                            )}
+                          </span>
+                        </td>
                         <td className="py-2 px-3 font-mono text-zinc-500">
                           {formatDateTime(log.created_at)}
                         </td>
