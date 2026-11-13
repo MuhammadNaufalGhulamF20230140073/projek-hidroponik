@@ -6,26 +6,26 @@
  - Pin Sensor TDS   : GPIO 34 (ADC 12-Bit, Atenuasi 11dB)
  - Pin Relay Pompa  : GPIO 23 (Aktif LOW: LOW = ON, HIGH = OFF)
  
- Library yang dibutuhkan di Arduino IDE:
+ ZERO EXTERNAL DEPENDENCY:
+ Program ini TIDAK MEMERLUKAN library tambahan!
+ Semua library di bawah adalah bawaan resmi ESP32:
  1. WiFi.h            (Bawaan Board ESP32)
  2. HTTPClient.h      (Bawaan Board ESP32)
- 3. WiFiClientSecure.h(Bawaan Board ESP32 untuk HTTPS Vercel)
- 4. ArduinoJson.h     (Install via Tools -> Manage Libraries -> "ArduinoJson")
+ 3. WiFiClientSecure.h(Bawaan Board ESP32 untuk HTTPS)
  ==============================================================================
 */
 
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
-#include <ArduinoJson.h>
 
 // ============================================================================
 // 1. PENGATURAN WIFI & URL API VERCEL (SESUAIKAN DENGAN KEBUTUHAN ANDA)
 // ============================================================================
-const char* WIFI_SSID     = "NAMA_WIFI_ANDA";     // Ganti dengan nama WiFi / Hotspot HP
-const char* WIFI_PASSWORD = "PASSWORD_WIFI_ANDA"; // Ganti dengan password WiFi Anda
+const char* WIFI_SSID     = "NAMA_WIFI_ANDA";     // <-- Isi nama WiFi / Hotspot HP
+const char* WIFI_PASSWORD = "PASSWORD_WIFI_ANDA"; // <-- Isi password WiFi Anda
 
-// URL API Vercel resmi Anda
+// URL API Vercel resmi Anda (Sudah otomatis terpasang):
 const char* VERCEL_API_URL = "https://projek-hidroponik-capstone2.vercel.app/api/sensor";
 
 // ============================================================================
@@ -105,9 +105,9 @@ void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmSta
     return;
   }
 
-  // Gunakan WiFiClientSecure agar koneksi HTTPS Vercel aman dan lancar
+  // Gunakan WiFiClientSecure agar koneksi HTTPS Vercel lancar
   WiFiClientSecure client;
-  client.setInsecure(); // Mengabaikan verifikasi SSL certificate lokal agar tidak error
+  client.setInsecure(); // Mengabaikan verifikasi certificate lokal agar tidak error SSL
 
   HTTPClient http;
   if (!http.begin(client, VERCEL_API_URL)) {
@@ -117,40 +117,35 @@ void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmSta
 
   http.addHeader("Content-Type", "application/json");
 
-  // Format payload JSON untuk API Vercel
-  StaticJsonDocument<256> docReq;
-  docReq["adcRaw"]      = adcRaw;
-  docReq["teganganRaw"] = teganganRaw;
-  docReq["ppmRaw"]      = ppmRaw;
-  docReq["ppmStabil"]   = ppmStabil;
-  docReq["pompaAktif"]  = statusPompa;
+  // Format payload JSON Native (tanpa butuh library eksternal)
+  String jsonPayload = "{";
+  jsonPayload += "\"adcRaw\":" + String(adcRaw) + ",";
+  jsonPayload += "\"teganganRaw\":" + String(teganganRaw, 3) + ",";
+  jsonPayload += "\"ppmRaw\":" + String(ppmRaw, 1) + ",";
+  jsonPayload += "\"ppmStabil\":" + String(ppmStabil, 1) + ",";
+  jsonPayload += "\"pompaAktif\":" + String(statusPompa ? "true" : "false");
+  jsonPayload += "}";
 
-  String jsonPayload;
-  serializeJson(docReq, jsonPayload);
-
-  Serial.println("[HTTP] Mengirim data telemetri ke Vercel...");
+  Serial.println("[HTTP] Mengirim telemetri ke Vercel...");
   int httpCode = http.POST(jsonPayload);
 
   if (httpCode > 0) {
     String response = http.getString();
     Serial.printf("[HTTP] Sukses (Kode %d): %s\n", httpCode, response.c_str());
 
-    // Membaca perintah kontrol aktuator yang dikirim balik oleh Web Vercel
-    StaticJsonDocument<512> docRes;
-    DeserializationError error = deserializeJson(docRes, response);
+    // Parsing respon balik dari Web Vercel secara native
+    if (response.indexOf("\"mode\":\"manual\"") != -1) {
+      modeOperasi = "manual";
+    } else if (response.indexOf("\"mode\":\"auto\"") != -1) {
+      modeOperasi = "auto";
+    }
 
-    if (!error && docRes["success"] == true) {
-      const char* serverMode = docRes["control"]["mode"] | "auto";
-      bool serverPumpState   = docRes["control"]["state"] | false;
-
-      modeOperasi = String(serverMode);
-
-      // Jika user memilih mode MANUAL di Web, pompa mengikuti instruksi tombol Web
-      if (modeOperasi == "manual") {
-        if (pompaAktif != serverPumpState) {
-          Serial.printf("[KONTROL] Menerima override dari Web: Pompa -> %s\n", serverPumpState ? "ON" : "OFF");
-          kontrolPompa(serverPumpState);
-        }
+    // Jika mode MANUAL, baca instruksi saklar pompa dari web
+    if (modeOperasi == "manual") {
+      bool serverPumpState = (response.indexOf("\"state\":true") != -1);
+      if (pompaAktif != serverPumpState) {
+        Serial.printf("[KONTROL] Override dari Web: Pompa -> %s\n", serverPumpState ? "ON" : "OFF");
+        kontrolPompa(serverPumpState);
       }
     }
   } else {
