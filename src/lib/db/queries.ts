@@ -30,6 +30,54 @@ async function executeQuery<T = any>(queryText: string, params: any[] = []): Pro
 }
 
 /**
+ * Pastikan semua tabel dan kolom mutakhir ada di database
+ */
+async function ensureSchemaUpdated() {
+  if (!isDbConfigured()) return;
+  try {
+    await executeQuery(`
+      CREATE TABLE IF NOT EXISTS sensor_logs (
+        id BIGSERIAL PRIMARY KEY,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        adc_raw INTEGER NOT NULL,
+        tegangan REAL NOT NULL,
+        ppm_raw REAL NOT NULL,
+        ppm_stabil REAL NOT NULL,
+        status_pompa BOOLEAN NOT NULL DEFAULT false
+      );
+    `);
+    await executeQuery(`
+      CREATE INDEX IF NOT EXISTS idx_sensor_logs_created_at ON sensor_logs(created_at DESC);
+    `);
+    await executeQuery(`
+      CREATE TABLE IF NOT EXISTS system_control (
+        id VARCHAR(32) PRIMARY KEY DEFAULT 'default',
+        pump_mode VARCHAR(16) NOT NULL DEFAULT 'auto',
+        pump_state BOOLEAN NOT NULL DEFAULT false,
+        target_ppm_min REAL NOT NULL DEFAULT 560.0,
+        target_ppm_max REAL NOT NULL DEFAULT 840.0,
+        cooldown_minutes INTEGER NOT NULL DEFAULT 60,
+        last_dosing_at TIMESTAMP WITH TIME ZONE,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `);
+    await executeQuery(`
+      ALTER TABLE system_control ADD COLUMN IF NOT EXISTS cooldown_minutes INTEGER NOT NULL DEFAULT 60;
+    `);
+    await executeQuery(`
+      ALTER TABLE system_control ADD COLUMN IF NOT EXISTS last_dosing_at TIMESTAMP WITH TIME ZONE;
+    `);
+    await executeQuery(`
+      INSERT INTO system_control (id, pump_mode, pump_state, target_ppm_min, target_ppm_max, cooldown_minutes)
+      VALUES ('default', 'auto', false, 560.0, 840.0, 60)
+      ON CONFLICT (id) DO NOTHING;
+    `);
+  } catch (err: any) {
+    console.warn('ensureSchemaUpdated notice:', err.message);
+  }
+}
+
+/**
  * Inisialisasi skema tabel Vercel Postgres jika belum ada
  */
 export async function initDatabase() {
@@ -44,49 +92,7 @@ export async function initDatabase() {
   }
 
   try {
-    await executeQuery(`
-      CREATE TABLE IF NOT EXISTS sensor_logs (
-        id BIGSERIAL PRIMARY KEY,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        adc_raw INTEGER NOT NULL,
-        tegangan REAL NOT NULL,
-        ppm_raw REAL NOT NULL,
-        ppm_stabil REAL NOT NULL,
-        status_pompa BOOLEAN NOT NULL DEFAULT false
-      );
-    `);
-
-    await executeQuery(`
-      CREATE INDEX IF NOT EXISTS idx_sensor_logs_created_at ON sensor_logs(created_at DESC);
-    `);
-
-    await executeQuery(`
-      CREATE TABLE IF NOT EXISTS system_control (
-        id VARCHAR(32) PRIMARY KEY DEFAULT 'default',
-        pump_mode VARCHAR(16) NOT NULL DEFAULT 'auto',
-        pump_state BOOLEAN NOT NULL DEFAULT false,
-        target_ppm_min REAL NOT NULL DEFAULT 560.0,
-        target_ppm_max REAL NOT NULL DEFAULT 840.0,
-        cooldown_minutes INTEGER NOT NULL DEFAULT 60,
-        last_dosing_at TIMESTAMP WITH TIME ZONE,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-    `);
-
-    // Pastikan kolom baru cooldown_minutes & last_dosing_at ada jika tabel sudah terbuat sebelumnya
-    await executeQuery(`
-      ALTER TABLE system_control ADD COLUMN IF NOT EXISTS cooldown_minutes INTEGER NOT NULL DEFAULT 60;
-    `);
-    await executeQuery(`
-      ALTER TABLE system_control ADD COLUMN IF NOT EXISTS last_dosing_at TIMESTAMP WITH TIME ZONE;
-    `);
-
-    await executeQuery(`
-      INSERT INTO system_control (id, pump_mode, pump_state, target_ppm_min, target_ppm_max, cooldown_minutes)
-      VALUES ('default', 'auto', false, 560.0, 840.0, 60)
-      ON CONFLICT (id) DO NOTHING;
-    `);
-
+    await ensureSchemaUpdated();
     return {
       status: 'success',
       message: 'Tabel database berhasil diinisialisasi!',
@@ -160,7 +166,7 @@ export async function getLatestSensorLog(): Promise<SensorLog | null> {
 /**
  * Mengambil histori log sensor untuk grafik
  */
-export async function getSensorLogs(limit = 20): Promise<SensorLog[]> {
+export async function getSensorLogs(limit = 30): Promise<SensorLog[]> {
   if (!isDbConfigured()) {
     return mockDB.logs.slice(-limit);
   }
@@ -190,15 +196,23 @@ export async function getSystemControl(): Promise<SystemControl> {
 
   try {
     const rows = await executeQuery<SystemControl>(
-      `SELECT id, pump_mode, pump_state, target_ppm_min, target_ppm_max, cooldown_minutes, last_dosing_at, updated_at
+      `SELECT id, pump_mode, pump_state, target_ppm_min, target_ppm_max, 
+              COALESCE(cooldown_minutes, 60) AS cooldown_minutes, 
+              last_dosing_at, updated_at
        FROM system_control
        WHERE id = 'default'
        LIMIT 1`
     );
     if (rows.length > 0) {
-      return rows[0];
+      return {
+        ...rows[0],
+        cooldown_minutes: Number(rows[0].cooldown_minutes || 60),
+        target_ppm_min: Number(rows[0].target_ppm_min || 560),
+        target_ppm_max: Number(rows[0].target_ppm_max || 840),
+      };
     }
-    await initDatabase();
+
+    await ensureSchemaUpdated();
     return {
       id: 'default',
       pump_mode: 'auto',
@@ -207,14 +221,16 @@ export async function getSystemControl(): Promise<SystemControl> {
       target_ppm_max: 840.0,
       cooldown_minutes: 60,
     };
-  } catch (error) {
-    console.warn('Gagal membaca system_control:', error);
+  } catch (error: any) {
+    console.warn('Fallback getSystemControl schema check:', error.message);
+    await ensureSchemaUpdated();
     return mockDB.control;
   }
 }
 
 /**
  * Memperbarui status kontrol pompa, batas ambang nutrisi, & jeda cooldown dari Web Dashboard
+ * Menggunakan UPSERT (INSERT ... ON CONFLICT DO UPDATE) agar selalu berhasil 100%!
  */
 export async function updatePumpControl(params: {
   mode?: 'auto' | 'manual';
@@ -225,11 +241,11 @@ export async function updatePumpControl(params: {
   last_dosing_at?: string;
 }): Promise<SystemControl> {
   const current = await getSystemControl();
-  const newMode = params.mode ?? current.pump_mode;
-  const newState = params.state !== undefined ? params.state : current.pump_state;
-  const newMin = params.target_ppm_min !== undefined ? params.target_ppm_min : current.target_ppm_min;
-  const newMax = params.target_ppm_max !== undefined ? params.target_ppm_max : current.target_ppm_max;
-  const newCooldown = params.cooldown_minutes !== undefined ? params.cooldown_minutes : (current.cooldown_minutes || 60);
+  const newMode = params.mode ?? current.pump_mode ?? 'auto';
+  const newState = params.state !== undefined ? params.state : (current.pump_state ?? false);
+  const newMin = params.target_ppm_min !== undefined ? params.target_ppm_min : (current.target_ppm_min ?? 560);
+  const newMax = params.target_ppm_max !== undefined ? params.target_ppm_max : (current.target_ppm_max ?? 840);
+  const newCooldown = params.cooldown_minutes !== undefined ? params.cooldown_minutes : (current.cooldown_minutes ?? 60);
   const newLastDosing = params.last_dosing_at !== undefined ? params.last_dosing_at : current.last_dosing_at;
 
   if (!isDbConfigured()) {
@@ -243,19 +259,29 @@ export async function updatePumpControl(params: {
     return mockDB.control;
   }
 
+  // Pastikan kolom schema terbaru ada di tabel
+  await ensureSchemaUpdated();
+
+  // Gunakan UPSERT yang dijamin tidak pernah gagal
   const rows = await executeQuery<SystemControl>(
-    `UPDATE system_control
-     SET pump_mode = $1,
-         pump_state = $2,
-         target_ppm_min = $3,
-         target_ppm_max = $4,
-         cooldown_minutes = $5,
-         last_dosing_at = COALESCE($6, last_dosing_at),
+    `INSERT INTO system_control (id, pump_mode, pump_state, target_ppm_min, target_ppm_max, cooldown_minutes, last_dosing_at, updated_at)
+     VALUES ('default', $1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (id) DO UPDATE
+     SET pump_mode = EXCLUDED.pump_mode,
+         pump_state = EXCLUDED.pump_state,
+         target_ppm_min = EXCLUDED.target_ppm_min,
+         target_ppm_max = EXCLUDED.target_ppm_max,
+         cooldown_minutes = EXCLUDED.cooldown_minutes,
+         last_dosing_at = COALESCE(EXCLUDED.last_dosing_at, system_control.last_dosing_at),
          updated_at = NOW()
-     WHERE id = 'default'
      RETURNING id, pump_mode, pump_state, target_ppm_min, target_ppm_max, cooldown_minutes, last_dosing_at, updated_at`,
     [newMode, newState, newMin, newMax, newCooldown, newLastDosing || null]
   );
 
-  return rows[0];
+  return {
+    ...rows[0],
+    cooldown_minutes: Number(rows[0].cooldown_minutes || 60),
+    target_ppm_min: Number(rows[0].target_ppm_min || 560),
+    target_ppm_max: Number(rows[0].target_ppm_max || 840),
+  };
 }

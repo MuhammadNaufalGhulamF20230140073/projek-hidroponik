@@ -123,7 +123,13 @@ export default function Home() {
       });
       if (res.ok) {
         const json = await res.json();
-        setControl(json.control);
+        if (json.control) {
+          setControl(json.control);
+        }
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        console.error('Control update error:', errJson);
+        alert('Gagal menyimpan konfigurasi: ' + (errJson.error || 'Koneksi error'));
       }
     } catch (err) {
       console.error('Failed to update control:', err);
