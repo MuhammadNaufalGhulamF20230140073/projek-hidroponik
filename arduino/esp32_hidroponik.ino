@@ -2,14 +2,15 @@
  ==============================================================================
  PROJEK HIDROPONIK IOT: ESP32 + SENSOR TDS + RELAY POMPA + VERCEL API
  ==============================================================================
- LOGIKA KONTROL POMPA NUTRISI ANTI-OVERDOSIS:
+ LOGIKA KONTROL POMPA NUTRISI:
  1. Mode OTOMATIS (AUTO):
     - Jika PPM < Batas Min (default 560 PPM), pompa MENYALA.
     - Pompa TERUS MENYALA sampai nutrisi larut mencapai Batas Max (default 840 PPM).
     - Begitu target tercapai, pompa MATI dan masuk masa COOLDOWN 1 JAM (60 Menit).
     - Selama masa 1 jam, pompa DIKUNCI (maksimal 1x siklus per jam) agar tidak over-nutrisi!
  2. Mode MANUAL:
-    - Saklar pompa 100% mengikuti tombol ON/OFF di Web Dashboard.
+    - Saklar pompa 100% mengikuti tombol ON / OFF di Web Dashboard.
+    - Relay Pin 23: HIGH = MENYALA (ON), LOW = MATI (OFF).
  ==============================================================================
 */
 
@@ -68,15 +69,15 @@ const unsigned long INTERVAL_KIRIM_AUTO   = 4000; // Kirim data setiap 4 detik s
 const unsigned long INTERVAL_KIRIM_MANUAL = 2000; // Kirim data setiap 2 detik saat MANUAL agar sat-set!
 
 // ============================================================================
-// FUNGSI RELAY POMPA (AKTIF LOW)
+// FUNGSI RELAY POMPA (AKTIF HIGH: HIGH = MENYALA/ON, LOW = MATI/OFF)
 // ============================================================================
 void kontrolPompa(bool status) {
   pompaAktif = status;
   if (status) {
-    digitalWrite(RELAY_PIN, LOW); // Relay ON saat logika LOW
-    Serial.println("[POMPA] Status: AKTIF (ON)");
+    digitalWrite(RELAY_PIN, HIGH); // Relay MENYALA saat sinyal HIGH
+    Serial.println("[POMPA] Status: MENYALA (ON)");
   } else {
-    digitalWrite(RELAY_PIN, HIGH); // Relay OFF saat logika HIGH
+    digitalWrite(RELAY_PIN, LOW);  // Relay MATI saat sinyal LOW
     Serial.println("[POMPA] Status: MATI (OFF)");
   }
 }

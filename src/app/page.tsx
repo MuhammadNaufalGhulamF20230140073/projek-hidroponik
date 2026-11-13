@@ -203,28 +203,28 @@ export default function Home() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 font-mono">
               <Card>
                 <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">
-                  RELAY ACTUATOR [GPIO 23]
+                  STATUS POMPA AIR (PIN 23)
                 </div>
                 <div className="mt-2 flex items-baseline justify-between">
-                  <span className="text-xl font-bold tracking-tight">
-                    {latestLog.status_pompa ? 'ACTIVE (PUMP ON)' : 'IDLE (PUMP OFF)'}
+                  <span className={`text-xl font-bold tracking-tight ${latestLog.status_pompa ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-500'}`}>
+                    {latestLog.status_pompa ? 'MENYALA (ON)' : 'MATI (OFF)'}
                   </span>
-                  <Badge variant={latestLog.status_pompa ? 'danger' : 'neutral'} dot={latestLog.status_pompa}>
-                    {latestLog.status_pompa ? 'LOW' : 'HIGH'}
+                  <Badge variant={latestLog.status_pompa ? 'success' : 'neutral'} dot={latestLog.status_pompa}>
+                    {latestLog.status_pompa ? 'AKTIF' : 'STANDBY'}
                   </Badge>
                 </div>
               </Card>
 
               <Card>
                 <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">
-                  CONTROL PARADIGM
+                  MODE KONTROL
                 </div>
                 <div className="mt-2 flex items-baseline justify-between">
                   <span className="text-xl font-bold tracking-tight uppercase">
-                    {control.pump_mode}
+                    {control.pump_mode === 'auto' ? 'OTOMATIS' : 'MANUAL'}
                   </span>
                   <Badge variant={control.pump_mode === 'auto' ? 'success' : 'neutral'}>
-                    {control.pump_mode === 'auto' ? 'CLOSED-LOOP' : 'MANUAL'}
+                    {control.pump_mode === 'auto' ? 'CLOSED-LOOP' : 'SAKLAR'}
                   </Badge>
                 </div>
               </Card>
@@ -301,8 +301,8 @@ export default function Home() {
                             {log.ppm_stabil.toFixed(1)}
                           </td>
                           <td className="py-2 px-3">
-                            <Badge variant={log.status_pompa ? 'danger' : 'neutral'}>
-                              {log.status_pompa ? 'ON' : 'OFF'}
+                            <Badge variant={log.status_pompa ? 'success' : 'neutral'}>
+                              {log.status_pompa ? 'MENYALA' : 'MATI'}
                             </Badge>
                           </td>
                         </tr>
@@ -400,8 +400,8 @@ export default function Home() {
                           {log.ppm_stabil.toFixed(1)}
                         </td>
                         <td className="py-1.5 px-3">
-                          <Badge variant={log.status_pompa ? 'danger' : 'neutral'}>
-                            {log.status_pompa ? 'ON' : 'OFF'}
+                          <Badge variant={log.status_pompa ? 'success' : 'neutral'}>
+                            {log.status_pompa ? 'MENYALA' : 'MATI'}
                           </Badge>
                         </td>
                       </tr>

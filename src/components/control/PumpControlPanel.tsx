@@ -61,7 +61,7 @@ export function PumpControlPanel({
     try {
       setLoading(true);
       await onUpdateControl({ mode: newMode });
-      showSuccess(`ENGINE MODE: ${newMode.toUpperCase()}`);
+      showSuccess(`MODE OPERASI DIUBAH: ${newMode === 'auto' ? 'OTOMATIS (AUTO)' : 'MANUAL (SAKLAR)'}`);
     } finally {
       setLoading(false);
     }
@@ -71,7 +71,7 @@ export function PumpControlPanel({
     try {
       setLoading(true);
       await onUpdateControl({ mode: 'manual', state: newState });
-      showSuccess(`RELAY PIN 23 -> ${newState ? 'FORCE ON (LOW)' : 'FORCE OFF (HIGH)'}`);
+      showSuccess(`PERINTAH TERKIRIM: POMPA ${newState ? 'DINYALAKAN (ON)' : 'DIMATIKAN (OFF)'}`);
     } finally {
       setLoading(false);
     }
@@ -118,21 +118,21 @@ export function PumpControlPanel({
 
   return (
     <Card
-      title="ACTUATOR LOGIC ENGINE & DOSING CONTROLLER"
-      subtitle="Opto-Coupled Relay &bull; GPIO 23 (Active LOW)"
+      title="KONTROL AKTIVASI POMPA & ENGINE NUTRISI"
+      subtitle="Relay Pompa Air &bull; GPIO 23"
       action={
         <div className="flex items-center gap-2">
           {control.pump_mode === 'auto' ? (
             <Badge variant={isInCooldown ? 'warning' : 'success'} dot>
-              {isInCooldown ? `COOLDOWN: ~${remainingMins}m` : 'DOSING READY'}
+              {isInCooldown ? `COOLDOWN: ~${remainingMins}m` : 'OTOMATIS AKTIF'}
             </Badge>
           ) : (
-            <Badge variant={isDeviceSyncing ? 'warning' : 'neutral'} dot={isDeviceSyncing}>
-              {isDeviceSyncing ? 'DISPATCHING TO ESP32...' : 'MANUAL CONTROL'}
+            <Badge variant="neutral">
+              MODE MANUAL
             </Badge>
           )}
           <Badge variant={actualPumpActive ? 'danger' : 'neutral'} dot={actualPumpActive}>
-            HARDWARE: {actualPumpActive ? 'ACTIVE [LOW]' : 'STANDBY [HIGH]'}
+            POMPA FISIK: {actualPumpActive ? 'MENYALA (ON)' : 'MATI (OFF)'}
           </Badge>
         </div>
       }
@@ -161,15 +161,15 @@ export function PumpControlPanel({
             )}
             <span className="font-semibold">
               {isInCooldown
-                ? `INTER-DOSING REST ACTIVE (Tersisa: ~${remainingMins} Menit)`
-                : 'CLOSED-LOOP DOSER READY'}
+                ? `JEDA COOLDOWN NUTRISI AKTIF (Tersisa: ~${remainingMins} Menit)`
+                : 'SISTEM SIAP MEMOMPA SECARA OTOMATIS'}
             </span>
           </div>
 
           <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
             {isInCooldown
-              ? 'Lockout aktif: 1x siklus per jam agar nutrisi homogen'
-              : `Trigger saat PPM < ${control.target_ppm_min || 560}`}
+              ? 'Proteksi overdosis: Pompa istirahat agar larutan homogen'
+              : `Pompa menyala saat PPM < ${control.target_ppm_min || 560}`}
           </span>
         </div>
       )}
@@ -179,80 +179,100 @@ export function PumpControlPanel({
         {/* Segmented Mode Selector */}
         <div className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-3.5 dark:border-zinc-800 dark:bg-zinc-800/40">
           <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-zinc-500 block">
-            Control Paradigm
+            Pilih Mode Operasi Pompa
           </span>
           <p className="mt-0.5 text-xs text-zinc-400">
-            Pilih antara otomasi closed-loop atau kontrol saklar manual.
+            Gunakan mode otomatis agar dikontrol sensor atau mode manual untuk saklar langsung.
           </p>
 
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
               onClick={() => handleToggleMode('auto')}
               disabled={loading}
-              className={`rounded-lg border px-3 py-2 text-center font-mono text-xs transition-all cursor-pointer ${
+              className={`rounded-lg border px-3 py-2.5 text-center font-mono text-xs transition-all cursor-pointer ${
                 control.pump_mode === 'auto'
-                  ? 'border-zinc-900 bg-zinc-900 font-bold text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900'
+                  ? 'border-emerald-600 bg-emerald-600 font-bold text-white shadow-sm dark:border-emerald-500 dark:bg-emerald-600'
                   : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
               }`}
             >
-              CLOSED-LOOP (AUTO)
+              OTOMATIS (AUTO)
             </button>
 
             <button
               onClick={() => handleToggleMode('manual')}
               disabled={loading}
-              className={`rounded-lg border px-3 py-2 text-center font-mono text-xs transition-all cursor-pointer ${
+              className={`rounded-lg border px-3 py-2.5 text-center font-mono text-xs transition-all cursor-pointer ${
                 control.pump_mode === 'manual'
                   ? 'border-zinc-900 bg-zinc-900 font-bold text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900'
                   : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
               }`}
             >
-              MANUAL OVERRIDE
+              MANUAL (SAKLAR)
             </button>
           </div>
         </div>
 
-        {/* Manual Override Action */}
+        {/* Manual Override Action with 2 Clear Buttons */}
         <div className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-3.5 dark:border-zinc-800 dark:bg-zinc-800/40">
           <div className="flex items-center justify-between">
             <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-zinc-500 block">
-              Physical Actuator Force
+              Saklar Kontrol Manual
             </span>
-            <div className="flex items-center gap-1.5 font-mono text-[10px]">
-              {isManual && (
-                <span
-                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-[10px] ${
-                    isDeviceSyncing
-                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 animate-pulse'
-                      : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                  }`}
-                >
-                  <span className={`h-1.5 w-1.5 rounded-full ${isDeviceSyncing ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                  {isDeviceSyncing ? 'Menyinkronkan ke ESP32...' : 'Tersinkron dengan Device'}
-                </span>
-              )}
-              <span className="text-zinc-400">GPIO 23</span>
-            </div>
+            <span className="font-mono text-[10px] text-zinc-400">Relay Pin 23</span>
           </div>
-          <p className="mt-0.5 text-xs text-zinc-400">
-            {control.pump_mode === 'auto'
-              ? 'Menekan saklar akan otomatis mengalihkan sistem ke mode MANUAL.'
-              : isDesiredActive
-              ? 'Status target: AKTIF (ON). Menunggu hardware konfirmasi.'
-              : 'Status target: STANDBY (OFF). Pompa dalam keadaan mati.'}
-          </p>
 
-          <div className="mt-3">
-            <Button
-              variant={isDesiredActive ? 'danger' : 'primary'}
-              size="md"
-              loading={loading}
-              onClick={() => handleTogglePumpState(!isDesiredActive)}
-              className="w-full justify-center font-mono text-xs uppercase tracking-wider h-8.5 cursor-pointer shadow-sm"
+          {/* Banner Status Pompa yang Sangat Jelas */}
+          <div
+            className={`mt-2 flex items-center justify-between rounded-md border px-3 py-2 font-mono text-xs ${
+              isDesiredActive
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                : 'border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-400'
+            }`}
+          >
+            <div className="flex items-center gap-2 font-bold">
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${
+                  isDesiredActive ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'
+                }`}
+              />
+              STATUS: {isDesiredActive ? 'POMPA MENYALA (ON)' : 'POMPA MATI (OFF)'}
+            </div>
+            {isDeviceSyncing ? (
+              <span className="text-[10px] text-amber-500 animate-pulse">Menyinkronkan...</span>
+            ) : (
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400">Tersinkron</span>
+            )}
+          </div>
+
+          {/* Dua Tombol Terpisah & Jelas: NYALAKAN & MATIKAN */}
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => handleTogglePumpState(true)}
+              className={`flex items-center justify-center gap-1.5 rounded-lg border py-2 px-3 font-mono text-xs font-bold transition-all cursor-pointer ${
+                isDesiredActive
+                  ? 'border-emerald-600 bg-emerald-600 text-white shadow-md ring-2 ring-emerald-500/40'
+                  : 'border-emerald-600/30 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+              }`}
             >
               <Power className="h-3.5 w-3.5" />
-              {isDesiredActive ? 'FORCE RELAY OFF (HIGH)' : 'FORCE RELAY ON (LOW)'}
-            </Button>
+              NYALAKAN (ON)
+            </button>
+
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => handleTogglePumpState(false)}
+              className={`flex items-center justify-center gap-1.5 rounded-lg border py-2 px-3 font-mono text-xs font-bold transition-all cursor-pointer ${
+                !isDesiredActive
+                  ? 'border-rose-600 bg-rose-600 text-white shadow-md ring-2 ring-rose-500/40'
+                  : 'border-rose-600/30 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+              }`}
+            >
+              <Power className="h-3.5 w-3.5" />
+              MATIKAN (OFF)
+            </button>
           </div>
         </div>
       </div>
