@@ -2,16 +2,10 @@
  ==============================================================================
  PROJEK HIDROPONIK IOT: ESP32 + SENSOR TDS + RELAY POMPA + VERCEL API
  ==============================================================================
- Keterangan Pin Hardware:
- - Pin Sensor TDS   : GPIO 34 (ADC 12-Bit, Atenuasi 11dB)
- - Pin Relay Pompa  : GPIO 23 (Aktif LOW: LOW = ON, HIGH = OFF)
- 
- ZERO EXTERNAL DEPENDENCY:
- Program ini TIDAK MEMERLUKAN library tambahan!
- Semua library di bawah adalah bawaan resmi ESP32:
- 1. WiFi.h            (Bawaan Board ESP32)
- 2. HTTPClient.h      (Bawaan Board ESP32)
- 3. WiFiClientSecure.h(Bawaan Board ESP32 untuk HTTPS)
+ Catatan Penting WiFi ESP32:
+ - ESP32 HANYA mendukung frekuensi WiFi 2.4 GHz (TIDAK mendukung 5 GHz).
+ - Jika menggunakan Hotspot HP, aktifkan opsi "Maximize Compatibility" / "2.4 GHz Band".
+ - Pastikan huruf besar/kecil (Caps Lock) SSID dan Password tepat.
  ==============================================================================
 */
 
@@ -20,12 +14,12 @@
 #include <WiFiClientSecure.h>
 
 // ============================================================================
-// 1. PENGATURAN WIFI & URL API VERCEL (SESUAIKAN DENGAN KEBUTUHAN ANDA)
+// 1. PENGATURAN WIFI & URL API VERCEL (PERIKSA DENGAN TELITI)
 // ============================================================================
-const char* WIFI_SSID     = "NAMA_WIFI_ANDA";     // <-- Isi nama WiFi / Hotspot HP
-const char* WIFI_PASSWORD = "PASSWORD_WIFI_ANDA"; // <-- Isi password WiFi Anda
+const char* WIFI_SSID     = "NAMA_WIFI_ANDA";     // <-- Nama WiFi / Hotspot 2.4 GHz
+const char* WIFI_PASSWORD = "PASSWORD_WIFI_ANDA"; // <-- Password WiFi Anda
 
-// URL API Vercel resmi Anda (Sudah otomatis terpasang):
+// URL API Vercel resmi Anda:
 const char* VERCEL_API_URL = "https://projek-hidroponik-capstone2.vercel.app/api/sensor";
 
 // ============================================================================
@@ -35,7 +29,7 @@ const char* VERCEL_API_URL = "https://projek-hidroponik-capstone2.vercel.app/api
 #define RELAY_PIN 23
 
 // ============================================================================
-// 3. PENGATURAN KALIBRASI (SESUAI KODE ACUAN ASLI ANDA)
+// 3. PENGATURAN KALIBRASI (SESUAI KODE ACUAN ASLI)
 // ============================================================================
 float calibrationFactor = 0.9344;
 float temperature       = 25.0;
@@ -53,7 +47,7 @@ float ppmFiltered = 0;
 bool filterReady  = false;
 
 // ============================================================================
-// 5. PENGATURAN TIMER & INTERVAL PENGIRIMAN
+// 5. PENGATURAN TIMER
 // ============================================================================
 unsigned long waktuPompa = 0;
 const unsigned long INTERVAL_POMPA = 5000; // Siklus 5 detik saat mode AUTO
@@ -62,24 +56,24 @@ unsigned long waktuKirim = 0;
 const unsigned long INTERVAL_KIRIM = 5000; // Kirim data ke Vercel setiap 5 detik
 
 bool pompaAktif = false;
-String modeOperasi = "auto"; // "auto" (sesuai timer) atau "manual" (remote web)
+String modeOperasi = "auto";
 
 // ============================================================================
-// FUNGSI KONTROL RELAY POMPA (RELAY AKTIF LOW)
+// FUNGSI RELAY POMPA (AKTIF LOW)
 // ============================================================================
 void kontrolPompa(bool status) {
   pompaAktif = status;
   if (status) {
-    digitalWrite(RELAY_PIN, LOW); // Relay ON saat logika LOW
+    digitalWrite(RELAY_PIN, LOW); // Relay ON
     Serial.println("[POMPA] Status: AKTIF (ON)");
   } else {
-    digitalWrite(RELAY_PIN, HIGH); // Relay OFF saat logika HIGH
+    digitalWrite(RELAY_PIN, HIGH); // Relay OFF
     Serial.println("[POMPA] Status: MATI (OFF)");
   }
 }
 
 // ============================================================================
-// FUNGSI MENGHITUNG NILAI PPM DARI TEGANGAN SENSOR
+// FUNGSI MENGHITUNG PPM TDS
 // ============================================================================
 float hitungPPM(float tegangan) {
   float compensationCoefficient = 1.0 + 0.02 * (temperature - 25.0);
@@ -96,28 +90,26 @@ float hitungPPM(float tegangan) {
 }
 
 // ============================================================================
-// FUNGSI MENGIRIM TELEMETRI KE VERCEL SERVERLESS (HTTPS)
+// FUNGSI SINKRONISASI KE VERCEL (HTTPS)
 // ============================================================================
 void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmStabil, bool statusPompa) {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[WIFI] Koneksi terputus. Menghubungkan ulang...");
-    WiFi.reconnect();
+    Serial.println("[WIFI] Status: Belum terhubung ke internet. Menunggu koneksi...");
     return;
   }
 
-  // Gunakan WiFiClientSecure agar koneksi HTTPS Vercel lancar
   WiFiClientSecure client;
-  client.setInsecure(); // Mengabaikan verifikasi certificate lokal agar tidak error SSL
+  client.setInsecure(); // Bypass SSL verification di mikrokontroler
 
   HTTPClient http;
   if (!http.begin(client, VERCEL_API_URL)) {
-    Serial.println("[HTTP] Gagal menginisialisasi koneksi HTTPS");
+    Serial.println("[HTTP] Gagal inisialisasi HTTPS");
     return;
   }
 
   http.addHeader("Content-Type", "application/json");
 
-  // Format payload JSON Native (tanpa butuh library eksternal)
+  // Format JSON payload
   String jsonPayload = "{";
   jsonPayload += "\"adcRaw\":" + String(adcRaw) + ",";
   jsonPayload += "\"teganganRaw\":" + String(teganganRaw, 3) + ",";
@@ -126,21 +118,20 @@ void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmSta
   jsonPayload += "\"pompaAktif\":" + String(statusPompa ? "true" : "false");
   jsonPayload += "}";
 
-  Serial.println("[HTTP] Mengirim telemetri ke Vercel...");
+  Serial.println("[HTTP] Mengirim data telemetri ke Vercel...");
   int httpCode = http.POST(jsonPayload);
 
   if (httpCode > 0) {
     String response = http.getString();
-    Serial.printf("[HTTP] Sukses (Kode %d): %s\n", httpCode, response.c_str());
+    Serial.printf("[HTTP] Sukses (%d): %s\n", httpCode, response.c_str());
 
-    // Parsing respon balik dari Web Vercel secara native
+    // Cek respon instruksi kontrol dari Web
     if (response.indexOf("\"mode\":\"manual\"") != -1) {
       modeOperasi = "manual";
     } else if (response.indexOf("\"mode\":\"auto\"") != -1) {
       modeOperasi = "auto";
     }
 
-    // Jika mode MANUAL, baca instruksi saklar pompa dari web
     if (modeOperasi == "manual") {
       bool serverPumpState = (response.indexOf("\"state\":true") != -1);
       if (pompaAktif != serverPumpState) {
@@ -149,54 +140,56 @@ void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmSta
       }
     }
   } else {
-    Serial.printf("[HTTP] Gagal kirim, error: %s\n", http.errorToString(httpCode).c_str());
+    Serial.printf("[HTTP] Gagal kirim (%s)\n", http.errorToString(httpCode).c_str());
   }
 
   http.end();
 }
 
 // ============================================================================
-// SETUP PROGRAM
+// SETUP
 // ============================================================================
 void setup() {
   Serial.begin(115200);
+  delay(1000);
 
-  // 1. Konfigurasi resolusi ADC ESP32 (12-Bit = 0 - 4095)
+  // 1. Konfigurasi ADC ESP32
   analogReadResolution(12);
   analogSetPinAttenuation(TDS_PIN, ADC_11db);
 
   // 2. Konfigurasi Relay Pompa
   pinMode(RELAY_PIN, OUTPUT);
-  kontrolPompa(false); // Awal program pompa dalam keadaan mati
+  kontrolPompa(false);
 
   Serial.println();
   Serial.println("=========================================");
   Serial.println("   SISTEM MONITORING HIDROPONIK ESP32    ");
   Serial.println("=========================================");
-  Serial.println("Sensor TDS Pin : GPIO 34");
-  Serial.println("Relay Pompa Pin: GPIO 23 (Aktif LOW)");
-  Serial.println("Komunikasi     : HTTPS -> Vercel Serverless");
-  Serial.println("-----------------------------------------");
+  Serial.printf("Menghubungkan ke WiFi SSID: %s\n", WIFI_SSID);
 
-  // 3. Menghubungkan ke WiFi
+  // 3. Konfigurasi WiFi
   WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true); // Biarkan ESP32 otomatis menyambung ulang di background
+  WiFi.persistent(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  Serial.print("[WIFI] Menghubungkan ke ");
-  Serial.print(WIFI_SSID);
 
-  int percobaan = 0;
-  while (WiFi.status() != WL_CONNECTED && percobaan < 25) {
+  // Tunggu koneksi hingga 40 detik
+  int attempt = 0;
+  while (WiFi.status() != WL_CONNECTED && attempt < 40) {
     delay(500);
     Serial.print(".");
-    percobaan++;
+    attempt++;
   }
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n[WIFI] Berhasil Terhubung!");
-    Serial.print("[WIFI] IP Address ESP32: ");
+    Serial.println("\n[WIFI] ALHAMDULILLAH TERHUBUNG!");
+    Serial.print("[WIFI] IP ESP32: ");
     Serial.println(WiFi.localIP());
   } else {
-    Serial.println("\n[WIFI] Gagal terhubung (ESP32 berjalan mandiri secara offline).");
+    Serial.println("\n[WIFI] Gagal terhubung di awal. Pastikan:");
+    Serial.println(" 1. WiFi menggunakan frekuensi 2.4 GHz (ESP32 tidak bisa 5 GHz)");
+    Serial.println(" 2. SSID dan Password tidak salah ketik (perhatikan huruf besar/kecil)");
+    Serial.println("ESP32 akan terus mencoba menyambung di background sambil membaca sensor.");
   }
 }
 
@@ -211,7 +204,7 @@ void loop() {
   // 2. Perhitungan PPM instan (RAW)
   float ppmRaw = hitungPPM(teganganRaw);
 
-  // 3. Mengambil 10 sampel ADC untuk averaging (rata-rata)
+  // 3. Mengambil 10 sampel ADC untuk averaging
   long totalADC = 0;
   for (int i = 0; i < JUMLAH_SAMPLE; i++) {
     totalADC += analogRead(TDS_PIN);
@@ -219,13 +212,13 @@ void loop() {
   }
   float adcAverage = totalADC / (float)JUMLAH_SAMPLE;
 
-  // 4. Perhitungan tegangan rata-rata
+  // 4. Tegangan rata-rata
   float teganganAverage = adcAverage * (3.3 / 4095.0);
 
-  // 5. Perhitungan PPM rata-rata
+  // 5. PPM rata-rata
   float ppmAverage = hitungPPM(teganganAverage);
 
-  // 6. Filter EMA (Exponential Moving Average) agar nilai stabil
+  // 6. Filter EMA
   if (!filterReady) {
     ppmFiltered = ppmAverage;
     filterReady = true;
@@ -233,7 +226,7 @@ void loop() {
     ppmFiltered = (EMA_ALPHA * ppmAverage) + ((1.0 - EMA_ALPHA) * ppmFiltered);
   }
 
-  // 7. Kontrol Otomatis Pompa (Hanya berjalan jika mode = AUTO)
+  // 7. Kontrol Otomatis Pompa (Hanya jika mode = AUTO)
   unsigned long sekarang = millis();
   if (modeOperasi == "auto") {
     if (sekarang - waktuPompa >= INTERVAL_POMPA) {
