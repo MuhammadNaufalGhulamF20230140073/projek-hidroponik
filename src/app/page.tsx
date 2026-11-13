@@ -108,6 +108,31 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [fetchData, control.pump_mode]);
 
+  // Real-time local countdown timer: kurangi 1 detik setiap detik agar timer countdown berjalan mulus (misal: 1m 22s -> 1m 21s)
+  useEffect(() => {
+    if (!cooldownInfo.is_in_cooldown || cooldownInfo.remaining_seconds <= 0) return;
+
+    const timer = setInterval(() => {
+      setCooldownInfo((prev) => {
+        if (!prev.is_in_cooldown || prev.remaining_seconds <= 1) {
+          return {
+            is_in_cooldown: false,
+            remaining_seconds: 0,
+            remaining_minutes: 0,
+          };
+        }
+        const nextSec = prev.remaining_seconds - 1;
+        return {
+          is_in_cooldown: true,
+          remaining_seconds: nextSec,
+          remaining_minutes: Math.ceil(nextSec / 60),
+        };
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [cooldownInfo.is_in_cooldown, cooldownInfo.remaining_seconds > 0]);
+
   // Handle control update dengan Optimistic UI (Sat-set & Instan)
   const handleUpdateControl = async (params: {
     mode?: 'auto' | 'manual';
@@ -240,7 +265,7 @@ export default function Home() {
                   </span>
                   <Badge variant={cooldownInfo.is_in_cooldown ? 'warning' : 'neutral'}>
                     {cooldownInfo.is_in_cooldown
-                      ? `REST: ~${cooldownInfo.remaining_minutes}m`
+                      ? `REST: ${Math.floor(cooldownInfo.remaining_seconds / 60)}m ${(cooldownInfo.remaining_seconds % 60).toString().padStart(2, '0')}s`
                       : `${control.cooldown_minutes || 60}m CD`}
                   </Badge>
                 </div>

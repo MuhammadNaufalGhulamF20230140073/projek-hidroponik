@@ -343,8 +343,10 @@ void loop() {
     if (pompaAktif) {
       Serial.printf(" [Mengisi Nutrisi -> Target: %.0f PPM]", targetPpmMin);
     } else if (masihCooldown) {
-      unsigned long sisaMnt = ((cooldownMs - (sekarangMs - waktuSelesaiDosing)) / 1000UL) / 60UL + 1;
-      Serial.printf(" [Cooldown: ~%lu menit]", sisaMnt);
+      unsigned long sisaDetik = (cooldownMs - (sekarangMs - waktuSelesaiDosing)) / 1000UL;
+      unsigned long sisaMnt = sisaDetik / 60UL;
+      unsigned long sisaDtk = sisaDetik % 60UL;
+      Serial.printf(" [Cooldown: %lum %02lus]", sisaMnt, sisaDtk);
     } else {
       Serial.printf(" [Siap Pompa jika < %.0f PPM]", targetPpmMin);
     }

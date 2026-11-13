@@ -114,7 +114,10 @@ export function PumpControlPanel({
   };
 
   const isInCooldown = Boolean(cooldownInfo?.is_in_cooldown);
-  const remainingMins = cooldownInfo?.remaining_minutes || 0;
+  const remainingSecs = cooldownInfo?.remaining_seconds || 0;
+  const remainingTimeStr = remainingSecs >= 60 
+    ? `${Math.floor(remainingSecs / 60)}m ${(remainingSecs % 60).toString().padStart(2, '0')}s` 
+    : `${remainingSecs}s`;
 
   return (
     <Card
@@ -124,7 +127,7 @@ export function PumpControlPanel({
         <div className="flex items-center gap-2">
           {control.pump_mode === 'auto' ? (
             <Badge variant={isInCooldown ? 'warning' : 'success'} dot>
-              {isInCooldown ? `COOLDOWN: ~${remainingMins}m` : 'OTOMATIS AKTIF'}
+              {isInCooldown ? `COOLDOWN: ${remainingTimeStr}` : 'OTOMATIS AKTIF'}
             </Badge>
           ) : (
             <Badge variant="neutral">
@@ -161,7 +164,7 @@ export function PumpControlPanel({
             )}
             <span className="font-semibold">
               {isInCooldown
-                ? `JEDA COOLDOWN NUTRISI AKTIF (Tersisa: ~${remainingMins} Menit)`
+                ? `JEDA COOLDOWN NUTRISI AKTIF (Tersisa: ${remainingTimeStr})`
                 : 'SISTEM SIAP MEMOMPA SECARA OTOMATIS'}
             </span>
           </div>
