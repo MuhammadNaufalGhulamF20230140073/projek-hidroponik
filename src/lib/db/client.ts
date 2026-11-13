@@ -1,12 +1,21 @@
 import { sql } from '@vercel/postgres';
-import { Pool } from '@neondatabase/serverless';
+import { neon } from '@neondatabase/serverless';
 
-// Deteksi apakah koneksi Vercel Postgres / Neon tersedia
-export const isDbConfigured = Boolean(
-  process.env.POSTGRES_URL ||
-  process.env.POSTGRES_PRISMA_URL ||
-  process.env.DATABASE_URL
-);
+// Cari connection string dari berbagai kemungkinan nama variabel Vercel / Neon
+export function getDbConnectionString(): string | null {
+  return (
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.DATABASE_URL ||
+    process.env.NEON_DATABASE_URL ||
+    null
+  );
+}
+
+export function isDbConfigured(): boolean {
+  return Boolean(getDbConnectionString());
+}
 
 // Fallback in-memory state saat dijalankan di local dev tanpa Vercel Postgres
 interface MockDB {
@@ -62,4 +71,3 @@ export const mockDB: MockDB = {
 };
 
 export { sql };
-
