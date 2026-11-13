@@ -3,13 +3,27 @@ import { insertSensorLog, getLatestSensorLog, getSystemControl } from '@/lib/db/
 
 /**
  * GET /api/sensor
- * Mengambil data sensor terbaru untuk dashboard
+ * Mengambil data sensor terbaru untuk dashboard & cek status online/offline ESP32
  */
 export async function GET() {
   try {
     const latest = await getLatestSensorLog();
     const control = await getSystemControl();
-    return NextResponse.json({ success: true, data: latest, control });
+
+    // Server-side heartbeat detection:
+    // ESP32 mengirim data tiap 5 detik. Jika dalam 15 detik tidak ada data masuk, maka ESP32 OFFLINE (MERAH).
+    const nowServer = Date.now();
+    const logTime = latest?.created_at ? new Date(latest.created_at).getTime() : 0;
+    const diffSeconds = logTime > 0 ? Math.round((nowServer - logTime) / 1000) : 9999;
+    const is_online = Boolean(latest && diffSeconds >= 0 && diffSeconds <= 15);
+
+    return NextResponse.json({
+      success: true,
+      data: latest,
+      control,
+      is_online,
+      last_seen_seconds: diffSeconds,
+    });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || 'Gagal membaca sensor' },

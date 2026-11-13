@@ -48,14 +48,24 @@ export function DashboardHeader({
 
         {/* Status Indicators & Refresh */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <Badge variant={isOnline ? 'success' : 'danger'} dot>
+          <Badge
+            variant={isOnline ? 'success' : 'danger'}
+            dot
+            className={
+              !isOnline
+                ? 'border-rose-300 bg-rose-50 text-rose-700 shadow-sm shadow-rose-500/10 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-400 font-semibold'
+                : 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400'
+            }
+          >
             {isOnline ? (
-              <span className="flex items-center gap-1">
-                <Wifi className="h-3 w-3" /> ESP32 Terhubung
+              <span className="flex items-center gap-1.5">
+                <Wifi className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                ESP32 Terhubung (Online)
               </span>
             ) : (
-              <span className="flex items-center gap-1">
-                <WifiOff className="h-3 w-3" /> ESP32 Offline
+              <span className="flex items-center gap-1.5">
+                <WifiOff className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+                ESP32 Terputus (Offline)
               </span>
             )}
           </Badge>

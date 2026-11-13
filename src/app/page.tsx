@@ -40,7 +40,7 @@ export default function Home() {
   });
 
   const [isDbActive, setIsDbActive] = useState(false);
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(false); // Default: Offline (Merah) sampai terbukti ada data masuk
 
   // Fetch telemetry & history
   const fetchData = useCallback(async () => {
@@ -53,14 +53,22 @@ export default function Home() {
         const json = await resSensor.json();
         if (json.data) {
           setLatestLog(json.data);
-          // Cek apakah data diperbarui dalam 30 detik terakhir
+        }
+        // Gunakan heartbeat server (ESP32 kirim tiap 5s; jika >15s tidak ada data, OFFLINE/MERAH)
+        if (json.is_online !== undefined) {
+          setIsOnline(Boolean(json.is_online));
+        } else if (json.data?.created_at) {
           const logTime = new Date(json.data.created_at).getTime();
-          const now = Date.now();
-          setIsOnline(now - logTime < 30000);
+          const diff = Math.round((Date.now() - logTime) / 1000);
+          setIsOnline(diff >= 0 && diff <= 15);
+        } else {
+          setIsOnline(false);
         }
         if (json.control) {
           setControl(json.control);
         }
+      } else {
+        setIsOnline(false);
       }
 
       // Fetch history untuk grafik
