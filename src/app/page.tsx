@@ -100,14 +100,15 @@ export default function Home() {
     }
   }, []);
 
-  // Polling loop
+  // Polling loop: 2 detik saat mode manual agar sat-set, 4 detik saat auto
   useEffect(() => {
     fetchData();
-    const timer = setInterval(fetchData, 5000);
+    const intervalMs = control.pump_mode === 'manual' ? 2000 : 4000;
+    const timer = setInterval(fetchData, intervalMs);
     return () => clearInterval(timer);
-  }, [fetchData]);
+  }, [fetchData, control.pump_mode]);
 
-  // Handle control update
+  // Handle control update dengan Optimistic UI (Sat-set & Instan)
   const handleUpdateControl = async (params: {
     mode?: 'auto' | 'manual';
     state?: boolean;
@@ -115,6 +116,16 @@ export default function Home() {
     target_ppm_max?: number;
     cooldown_minutes?: number;
   }) => {
+    // 1. Optimistic local update langsung tanpa menunggu roundtrip server
+    setControl((prev) => ({
+      ...prev,
+      pump_mode: params.mode ?? prev.pump_mode,
+      pump_state: params.state !== undefined ? params.state : prev.pump_state,
+      target_ppm_min: params.target_ppm_min ?? prev.target_ppm_min,
+      target_ppm_max: params.target_ppm_max ?? prev.target_ppm_max,
+      cooldown_minutes: params.cooldown_minutes ?? prev.cooldown_minutes,
+    }));
+
     try {
       const res = await fetch('/api/control', {
         method: 'POST',
@@ -126,13 +137,17 @@ export default function Home() {
         if (json.control) {
           setControl(json.control);
         }
+        // Segera refresh telemetri
+        fetchData();
       } else {
         const errJson = await res.json().catch(() => ({}));
         console.error('Control update error:', errJson);
         alert('Gagal menyimpan konfigurasi: ' + (errJson.error || 'Koneksi error'));
+        fetchData();
       }
     } catch (err) {
       console.error('Failed to update control:', err);
+      fetchData();
     }
   };
 

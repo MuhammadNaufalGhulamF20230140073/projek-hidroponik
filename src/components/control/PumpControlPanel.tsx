@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -50,6 +51,12 @@ export function PumpControlPanel({
     }
   }, [control, isUserEditing]);
 
+  const isManual = control.pump_mode === 'manual';
+  // Target status pompa yang diinginkan (optimistic / control state saat manual)
+  const isDesiredActive = isManual ? Boolean(control.pump_state) : actualPumpActive;
+  // Mengetahui apakah instruksi web sedang dalam perjalanan ke ESP32
+  const isDeviceSyncing = isManual && (Boolean(control.pump_state) !== actualPumpActive);
+
   const handleToggleMode = async (newMode: 'auto' | 'manual') => {
     try {
       setLoading(true);
@@ -64,7 +71,7 @@ export function PumpControlPanel({
     try {
       setLoading(true);
       await onUpdateControl({ mode: 'manual', state: newState });
-      showSuccess(`RELAY PIN 23: ${newState ? 'FORCE_ON (LOW)' : 'FORCE_OFF (HIGH)'}`);
+      showSuccess(`RELAY PIN 23 -> ${newState ? 'FORCE ON (LOW)' : 'FORCE OFF (HIGH)'}`);
     } finally {
       setLoading(false);
     }
@@ -115,13 +122,17 @@ export function PumpControlPanel({
       subtitle="Opto-Coupled Relay &bull; GPIO 23 (Active LOW)"
       action={
         <div className="flex items-center gap-2">
-          {control.pump_mode === 'auto' && (
+          {control.pump_mode === 'auto' ? (
             <Badge variant={isInCooldown ? 'warning' : 'success'} dot>
               {isInCooldown ? `COOLDOWN: ~${remainingMins}m` : 'DOSING READY'}
             </Badge>
+          ) : (
+            <Badge variant={isDeviceSyncing ? 'warning' : 'neutral'} dot={isDeviceSyncing}>
+              {isDeviceSyncing ? 'DISPATCHING TO ESP32...' : 'MANUAL CONTROL'}
+            </Badge>
           )}
           <Badge variant={actualPumpActive ? 'danger' : 'neutral'} dot={actualPumpActive}>
-            RELAY: {actualPumpActive ? 'ACTIVE [LOW]' : 'STANDBY [HIGH]'}
+            HARDWARE: {actualPumpActive ? 'ACTIVE [LOW]' : 'STANDBY [HIGH]'}
           </Badge>
         </div>
       }
@@ -207,24 +218,40 @@ export function PumpControlPanel({
             <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-zinc-500 block">
               Physical Actuator Force
             </span>
-            <span className="font-mono text-[10px] text-zinc-400">GPIO 23</span>
+            <div className="flex items-center gap-1.5 font-mono text-[10px]">
+              {isManual && (
+                <span
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-[10px] ${
+                    isDeviceSyncing
+                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 animate-pulse'
+                      : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  }`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${isDeviceSyncing ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                  {isDeviceSyncing ? 'Menyinkronkan ke ESP32...' : 'Tersinkron dengan Device'}
+                </span>
+              )}
+              <span className="text-zinc-400">GPIO 23</span>
+            </div>
           </div>
           <p className="mt-0.5 text-xs text-zinc-400">
             {control.pump_mode === 'auto'
               ? 'Menekan saklar akan otomatis mengalihkan sistem ke mode MANUAL.'
-              : 'Mode manual aktif. Status relay mengikuti tombol ini.'}
+              : isDesiredActive
+              ? 'Status target: AKTIF (ON). Menunggu hardware konfirmasi.'
+              : 'Status target: STANDBY (OFF). Pompa dalam keadaan mati.'}
           </p>
 
           <div className="mt-3">
             <Button
-              variant={actualPumpActive ? 'danger' : 'primary'}
+              variant={isDesiredActive ? 'danger' : 'primary'}
               size="md"
               loading={loading}
-              onClick={() => handleTogglePumpState(!actualPumpActive)}
-              className="w-full justify-center font-mono text-xs uppercase tracking-wider h-8.5"
+              onClick={() => handleTogglePumpState(!isDesiredActive)}
+              className="w-full justify-center font-mono text-xs uppercase tracking-wider h-8.5 cursor-pointer shadow-sm"
             >
               <Power className="h-3.5 w-3.5" />
-              {actualPumpActive ? 'FORCE RELAY OFF (HIGH)' : 'FORCE RELAY ON (LOW)'}
+              {isDesiredActive ? 'FORCE RELAY OFF (HIGH)' : 'FORCE RELAY ON (LOW)'}
             </Button>
           </div>
         </div>

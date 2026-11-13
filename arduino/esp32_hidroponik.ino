@@ -64,7 +64,8 @@ unsigned long waktuSelesaiDosing = 0; // Timestamp millis saat siklus dosing sel
 bool laporanDosingSelesai = false;
 
 unsigned long waktuKirim = 0;
-const unsigned long INTERVAL_KIRIM = 5000; // Kirim data ke Vercel setiap 5 detik
+const unsigned long INTERVAL_KIRIM_AUTO   = 4000; // Kirim data setiap 4 detik saat AUTO
+const unsigned long INTERVAL_KIRIM_MANUAL = 2000; // Kirim data setiap 2 detik saat MANUAL agar sat-set!
 
 // ============================================================================
 // FUNGSI RELAY POMPA (AKTIF LOW)
@@ -140,6 +141,10 @@ void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmSta
     if (response.indexOf("\"mode\":\"manual\"") != -1) {
       modeOperasi = "manual";
     } else if (response.indexOf("\"mode\":\"auto\"") != -1) {
+      if (modeOperasi == "manual" && pompaAktif && !sedangDosing) {
+        // Saat kembali ke auto dari manual ON, matikan pompa agar aman
+        kontrolPompa(false);
+      }
       modeOperasi = "auto";
     }
 
@@ -178,11 +183,11 @@ void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmSta
       }
     }
 
-    // 4. Jika mode MANUAL: Eksekusi tombol Saklar Web langsung
+    // 4. Jika mode MANUAL: Eksekusi tombol Saklar Web langsung & cetek seketika!
     if (modeOperasi == "manual") {
       bool serverPumpState = (response.indexOf("\"state\":true") != -1);
       if (pompaAktif != serverPumpState) {
-        Serial.printf("[KONTROL MANUAL] Saklar Web: Pompa -> %s\n", serverPumpState ? "ON" : "OFF");
+        Serial.printf("[KONTROL MANUAL] Saklar Web Berubah! Pompa -> %s\n", serverPumpState ? "ON (AKTIF)" : "OFF (MATI)");
         kontrolPompa(serverPumpState);
       }
     }
@@ -247,11 +252,11 @@ void loop() {
   // 2. Perhitungan PPM instan (RAW)
   float ppmRaw = hitungPPM(teganganRaw);
 
-  // 3. Mengambil 10 sampel ADC untuk averaging
+  // 3. Mengambil 10 sampel ADC untuk averaging (Cepat & Responsif)
   long totalADC = 0;
   for (int i = 0; i < JUMLAH_SAMPLE; i++) {
     totalADC += analogRead(TDS_PIN);
-    delay(50);
+    delay(10); // 10ms per sampel (total hanya 100ms, bukan 500ms!)
   }
   float adcAverage = totalADC / (float)JUMLAH_SAMPLE;
 
@@ -329,12 +334,13 @@ void loop() {
   }
   Serial.println();
 
-  // 9. Kirim data telemetri ke API Vercel setiap 5 detik
+  // 9. Kirim data telemetri ke API Vercel (2 detik saat MANUAL agar sat-set, 4 detik saat AUTO)
+  unsigned long intervalAktif = (modeOperasi == "manual") ? INTERVAL_KIRIM_MANUAL : INTERVAL_KIRIM_AUTO;
   unsigned long sekarang = millis();
-  if (sekarang - waktuKirim >= INTERVAL_KIRIM) {
+  if (sekarang - waktuKirim >= intervalAktif) {
     waktuKirim = sekarang;
     kirimDataKeVercel(adcRaw, teganganAverage, ppmRaw, ppmFiltered, pompaAktif);
   }
 
-  delay(500);
+  delay(25); // Loop ringan dan responsif
 }
