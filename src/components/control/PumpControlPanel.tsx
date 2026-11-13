@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Power, Cpu, Sliders, Check, Save, Clock, ShieldCheck, Timer } from 'lucide-react';
+import { Power, Cpu, Sliders, Check, Save, Clock, ShieldCheck, Timer, Sparkles } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -33,15 +33,22 @@ export function PumpControlPanel({
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
-  const [ppmMin, setPpmMin] = useState<number>(control.target_ppm_min || 560);
-  const [ppmMax, setPpmMax] = useState<number>(control.target_ppm_max || 840);
-  const [cooldownMins, setCooldownMins] = useState<number>(control.cooldown_minutes || 60);
+  // Simpan input sebagai string agar user bisa hapus/ketik angka dengan leluasa
+  const [ppmMin, setPpmMin] = useState<string>(String(control.target_ppm_min || 560));
+  const [ppmMax, setPpmMax] = useState<string>(String(control.target_ppm_max || 840));
+  const [cooldownMins, setCooldownMins] = useState<string>(String(control.cooldown_minutes || 60));
 
+  // Flag apakah user sedang mengetik (agar tidak tertimpa oleh polling 5 detik)
+  const [isUserEditing, setIsUserEditing] = useState(false);
+
+  // Sync hanya ketika user TIDAK sedang mengetik input
   useEffect(() => {
-    if (control.target_ppm_min) setPpmMin(control.target_ppm_min);
-    if (control.target_ppm_max) setPpmMax(control.target_ppm_max);
-    if (control.cooldown_minutes) setCooldownMins(control.cooldown_minutes);
-  }, [control]);
+    if (!isUserEditing) {
+      if (control.target_ppm_min) setPpmMin(String(control.target_ppm_min));
+      if (control.target_ppm_max) setPpmMax(String(control.target_ppm_max));
+      if (control.cooldown_minutes) setCooldownMins(String(control.cooldown_minutes));
+    }
+  }, [control, isUserEditing]);
 
   const handleToggleMode = async (newMode: 'auto' | 'manual') => {
     try {
@@ -64,17 +71,34 @@ export function PumpControlPanel({
   };
 
   const handleSaveSettings = async () => {
+    const valMin = parseFloat(ppmMin) || 560;
+    const valMax = parseFloat(ppmMax) || 840;
+    const valCd = parseInt(cooldownMins, 10) || 60;
+
+    if (valMin >= valMax) {
+      alert('Peringatan: Nilai Batas Minimum harus lebih kecil dari Batas Target Maksimum!');
+      return;
+    }
+
     try {
       setLoading(true);
       await onUpdateControl({
-        target_ppm_min: Number(ppmMin),
-        target_ppm_max: Number(ppmMax),
-        cooldown_minutes: Number(cooldownMins),
+        target_ppm_min: valMin,
+        target_ppm_max: valMax,
+        cooldown_minutes: valCd,
       });
-      showSuccess(`CONFIG APPLIED: ${ppmMin}-${ppmMax} PPM | COOLDOWN: ${cooldownMins}m`);
+      setIsUserEditing(false); // Reset flag setelah sukses disimpan
+      showSuccess(`CONFIG APPLIED: ${valMin}-${valMax} PPM | COOLDOWN: ${valCd}m`);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Preset Cepat
+  const applyPreset = (min: number, max: number) => {
+    setIsUserEditing(true);
+    setPpmMin(String(min));
+    setPpmMax(String(max));
   };
 
   const showSuccess = (msg: string) => {
@@ -213,9 +237,23 @@ export function PumpControlPanel({
             <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-zinc-500 block">
               Setpoints & Rest Window Parameters
             </span>
-            <p className="text-[11px] text-zinc-400">
-              Konfigurasi ambang aktivasi, target pengisian, dan jeda antar-dosing.
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[11px] text-zinc-400">Preset Cepat:</span>
+              <button
+                type="button"
+                onClick={() => applyPreset(560, 840)}
+                className="text-[10px] font-mono rounded bg-zinc-200/80 px-2 py-0.5 hover:bg-zinc-300 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-zinc-800 dark:text-zinc-200 cursor-pointer"
+              >
+                Selada (560-840)
+              </button>
+              <button
+                type="button"
+                onClick={() => applyPreset(1000, 1400)}
+                className="text-[10px] font-mono rounded bg-zinc-200/80 px-2 py-0.5 hover:bg-zinc-300 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-zinc-800 dark:text-zinc-200 cursor-pointer"
+              >
+                Sayur Buah (1000-1400)
+              </button>
+            </div>
           </div>
           <Button size="sm" onClick={handleSaveSettings} loading={loading} className="font-mono text-[11px] h-7">
             <Save className="h-3 w-3" />
@@ -228,48 +266,63 @@ export function PumpControlPanel({
             <label className="block text-[11px] uppercase text-zinc-500 dark:text-zinc-400 font-semibold">
               Min Threshold (Trigger ON)
             </label>
-            <div className="mt-1 flex items-center rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="mt-1 flex items-center rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 focus-within:border-zinc-900 focus-within:ring-1 focus-within:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus-within:border-zinc-100">
               <input
                 type="number"
                 value={ppmMin}
-                onChange={(e) => setPpmMin(Number(e.target.value))}
+                onFocus={() => setIsUserEditing(true)}
+                onChange={(e) => {
+                  setIsUserEditing(true);
+                  setPpmMin(e.target.value);
+                }}
                 className="w-full text-xs font-bold text-zinc-900 focus:outline-none dark:text-zinc-100"
+                placeholder="560"
               />
               <span className="text-[10px] text-zinc-400">PPM</span>
             </div>
-            <span className="mt-1 block text-[10px] text-zinc-400">Default: 560 PPM</span>
+            <span className="mt-1 block text-[10px] text-zinc-400">Pompa ON jika PPM &lt; ini</span>
           </div>
 
           <div>
             <label className="block text-[11px] uppercase text-zinc-500 dark:text-zinc-400 font-semibold">
               Target Cap (Cutoff OFF)
             </label>
-            <div className="mt-1 flex items-center rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="mt-1 flex items-center rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 focus-within:border-zinc-900 focus-within:ring-1 focus-within:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus-within:border-zinc-100">
               <input
                 type="number"
                 value={ppmMax}
-                onChange={(e) => setPpmMax(Number(e.target.value))}
+                onFocus={() => setIsUserEditing(true)}
+                onChange={(e) => {
+                  setIsUserEditing(true);
+                  setPpmMax(e.target.value);
+                }}
                 className="w-full text-xs font-bold text-zinc-900 focus:outline-none dark:text-zinc-100"
+                placeholder="840"
               />
               <span className="text-[10px] text-zinc-400">PPM</span>
             </div>
-            <span className="mt-1 block text-[10px] text-zinc-400">Default: 840 PPM</span>
+            <span className="mt-1 block text-[10px] text-zinc-400">Pompa OFF saat PPM &gt;= ini</span>
           </div>
 
           <div>
             <label className="block text-[11px] uppercase text-zinc-500 dark:text-zinc-400 font-semibold">
               Cooldown Window
             </label>
-            <div className="mt-1 flex items-center rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="mt-1 flex items-center rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 focus-within:border-zinc-900 focus-within:ring-1 focus-within:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus-within:border-zinc-100">
               <input
                 type="number"
                 value={cooldownMins}
-                onChange={(e) => setCooldownMins(Number(e.target.value))}
+                onFocus={() => setIsUserEditing(true)}
+                onChange={(e) => {
+                  setIsUserEditing(true);
+                  setCooldownMins(e.target.value);
+                }}
                 className="w-full text-xs font-bold text-zinc-900 focus:outline-none dark:text-zinc-100"
+                placeholder="60"
               />
               <span className="text-[10px] text-zinc-400">MINS</span>
             </div>
-            <span className="mt-1 block text-[10px] text-zinc-400">Maks 1x per 60 menit</span>
+            <span className="mt-1 block text-[10px] text-zinc-400">Maks 1x siklus per durasi ini</span>
           </div>
         </div>
       </div>
