@@ -73,7 +73,7 @@ const unsigned long INTERVAL_KIRIM_MANUAL = 2000; // Kirim data setiap 2 detik s
 // ============================================================================
 // DIKONFIRMASI dari hardware: relay cetek saat boot (setup LOW) = Active LOW module
 // Active LOW: relay MENYALA saat pin LOW, MATI saat pin HIGH
-const bool RELAY_ACTIVE_HIGH = false;
+const bool RELAY_ACTIVE_HIGH = true;
 
 void kontrolPompa(bool status) {
   pompaAktif = status;
