@@ -143,13 +143,19 @@ void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmSta
 
     // 1. Parsing Mode Operasi ('auto' vs 'manual')
     if (response.indexOf("\"mode\":\"manual\"") != -1) {
-      modeOperasi = "manual";
+      if (modeOperasi != "manual") {
+        Serial.println("[MODE] Mode berganti ke MANUAL");
+        modeOperasi = "manual";
+        sedangDosing = false;
+      }
     } else if (response.indexOf("\"mode\":\"auto\"") != -1) {
-      if (modeOperasi == "manual" && pompaAktif && !sedangDosing) {
-        // Saat kembali ke auto dari manual ON, matikan pompa agar aman
+      if (modeOperasi != "auto") {
+        Serial.println("[MODE] Mode berganti ke AUTO");
+        modeOperasi = "auto";
+        sedangDosing = false;
+        waktuSelesaiDosing = 0; // Reset cooldown agar langsung responsif
         kontrolPompa(false);
       }
-      modeOperasi = "auto";
     }
 
     // 2. Parsing Ambang Batas Nutrisi (target_ppm_min & target_ppm_max) dari Web
@@ -287,15 +293,22 @@ void loop() {
     // Jika TIDAK dalam masa cooldown:
     if (!masihCooldown) {
       // Jika PPM kurang dari batas minimum, mulai memompa sampai target tercapai
-      if (ppmFiltered < targetPpmMin && !sedangDosing) {
-        Serial.printf("[AUTO] PPM (%.1f) < Min (%.1f). Memulai pompa sampai target (%.1f)!\n", ppmFiltered, targetPpmMin, targetPpmMax);
-        kontrolPompa(true);
-        sedangDosing = true;
+      if (ppmFiltered < targetPpmMin) {
+        if (!sedangDosing || !pompaAktif) {
+          Serial.printf("[AUTO] PPM (%.1f) < Min (%.1f). Memulai pompa sampai target (%.1f)!\n", ppmFiltered, targetPpmMin, targetPpmMax);
+          kontrolPompa(true);
+          sedangDosing = true;
+        }
       }
     }
 
     // Jika sedang dalam proses dosing (pompa aktif mengisi nutrisi):
     if (sedangDosing) {
+      // Pastikan relay menyala selama siklus dosing jika belum cooldown
+      if (!pompaAktif && !masihCooldown && ppmFiltered < targetPpmMax) {
+        kontrolPompa(true);
+      }
+
       // Pompa terus bekerja sampai nutrisi mencapai batas optimal/maksimum
       if (ppmFiltered >= targetPpmMax) {
         Serial.printf("[AUTO] Target PPM Tercapai (%.1f >= %.1f). Matikan pompa & mulai Cooldown %d menit!\n", ppmFiltered, targetPpmMax, cooldownMinutes);
@@ -321,6 +334,7 @@ void loop() {
   Serial.print(pompaAktif ? "ON" : "OFF");
   Serial.print(" | Mode: ");
   Serial.print(modeOperasi);
+  Serial.printf(" [Target: %.0f-%.0f]", targetPpmMin, targetPpmMax);
 
   if (modeOperasi == "auto") {
     unsigned long cooldownMs = (unsigned long)cooldownMinutes * 60UL * 1000UL;
