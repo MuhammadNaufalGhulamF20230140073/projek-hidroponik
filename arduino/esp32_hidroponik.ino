@@ -25,9 +25,8 @@
 const char* WIFI_SSID     = "NAMA_WIFI_ANDA";     // Ganti dengan nama WiFi / Hotspot HP
 const char* WIFI_PASSWORD = "PASSWORD_WIFI_ANDA"; // Ganti dengan password WiFi Anda
 
-// Ganti URL di bawah ini dengan domain Vercel Anda + /api/sensor
-// Contoh: "https://projek-hidroponik-xxxx.vercel.app/api/sensor"
-const char* VERCEL_API_URL = "https://projek-hidroponik-xxxx.vercel.app/api/sensor";
+// URL API Vercel resmi Anda
+const char* VERCEL_API_URL = "https://projek-hidroponik-capstone2.vercel.app/api/sensor";
 
 // ============================================================================
 // 2. DEFINISI PIN HARDWARE ESP32
