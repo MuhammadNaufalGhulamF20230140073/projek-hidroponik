@@ -71,9 +71,10 @@ const unsigned long INTERVAL_KIRIM_MANUAL = 2000; // Kirim data setiap 2 detik s
 // ============================================================================
 // 6. PENGATURAN POLARITAS RELAY
 // ============================================================================
-// Atur true jika relay menyala saat sinyal HIGH (Active HIGH).
-// Ubah ke false jika modul relay Anda tipe Active LOW (menyala saat sinyal LOW).
-const bool RELAY_ACTIVE_HIGH = true;
+// Mayoritas modul relay ESP32/Arduino adalah Active LOW (Relay MENYALA saat sinyal LOW).
+// Jika relay Anda tipe Active LOW -> set false (Rekomendasi).
+// Jika relay Anda tipe Active HIGH -> set true.
+const bool RELAY_ACTIVE_HIGH = false;
 
 void kontrolPompa(bool status) {
   pompaAktif = status;
