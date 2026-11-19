@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { StatusBanner } from '@/components/dashboard/StatusBanner';
 import { PumpControlPanel } from '@/components/control/PumpControlPanel';
@@ -120,6 +120,9 @@ export default function DashboardPage() {
   const [isInitializingDb, setIsInitializingDb] = useState(false);
   const [dbInitMessage, setDbInitMessage] = useState<string | null>(null);
 
+  // Mencegah race-condition polling background menimpa state transisi user (anti-kedut)
+  const lastControlUpdateRef = useRef<number>(0);
+
   const [telemetry, setTelemetry] = useState({
     ppmStabil: 630.5,
     ppmRaw: 635.0,
@@ -168,6 +171,8 @@ export default function DashboardPage() {
       let deviceOnline = false;
       let seenSeconds = 9999;
 
+      const isRecentlyUpdated = Date.now() - lastControlUpdateRef.current < 3500;
+
       if (sensorData?.success) {
         deviceOnline = Boolean(sensorData.is_online);
         seenSeconds =
@@ -183,7 +188,8 @@ export default function DashboardPage() {
           });
         }
 
-        if (sensorData.control) {
+        // Jangan menimpa state jika user baru saja klik tombol dalam 3.5 detik (mencegah flickering)
+        if (sensorData.control && !isRecentlyUpdated) {
           setControlState((prev) => ({ ...prev, ...sensorData.control }));
         }
 
@@ -203,7 +209,7 @@ export default function DashboardPage() {
             ppmRaw: Number.isFinite(parsedPpmRaw) ? parsedPpmRaw : prev.ppmRaw,
             voltage: Number.isFinite(parsedVoltage) ? parsedVoltage : prev.voltage,
             adcRaw: Number.isFinite(parsedAdcRaw) ? parsedAdcRaw : prev.adcRaw,
-            actualPumpActive: nextPumpActive,
+            actualPumpActive: isRecentlyUpdated ? prev.actualPumpActive : nextPumpActive,
             isOnline: deviceOnline,
             lastSeenSeconds: seenSeconds,
           }));
@@ -221,7 +227,7 @@ export default function DashboardPage() {
         }));
       }
 
-      if (controlData?.success && controlData.control) {
+      if (controlData?.success && controlData.control && !isRecentlyUpdated) {
         setControlState((prev) => ({ ...prev, ...controlData.control }));
       }
 
@@ -299,6 +305,8 @@ export default function DashboardPage() {
     target_ppm_max?: number;
     cooldown_minutes?: number;
   }) => {
+    lastControlUpdateRef.current = Date.now();
+
     const optimisticState = {
       ...controlState,
       ...(params.mode !== undefined && { pump_mode: params.mode }),
@@ -472,9 +480,9 @@ export default function DashboardPage() {
                     <span className="font-mono text-[11px] sm:text-xs font-black tracking-wider text-zinc-900">
                       NUTRIENT CONCENTRATION (TDS)
                     </span>
-                    <span className={`shrink-0 rounded px-2 py-0.5 font-mono text-[10px] font-bold border ${
+                    <span className={`shrink-0 rounded px-2 py-0.5 font-mono text-[10px] font-bold border transition-colors duration-300 ${
                       (controlState.pump_mode === 'manual' ? Boolean(controlState.pump_state) : telemetry.actualPumpActive)
-                        ? 'bg-emerald-100 text-emerald-950 border-emerald-400 animate-pulse'
+                        ? 'bg-emerald-100 text-emerald-950 border-emerald-400'
                         : 'bg-zinc-100 text-zinc-800 border-zinc-300'
                     }`}>
                       {(controlState.pump_mode === 'manual' ? Boolean(controlState.pump_state) : telemetry.actualPumpActive)
@@ -676,8 +684,8 @@ export default function DashboardPage() {
                           <td className="p-3 whitespace-nowrap">
                             <span className="inline-flex items-center gap-1.5">
                               <span
-                                className={`inline-block h-2 w-2 rounded-full ${
-                                  log.is_active ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-400'
+                                className={`inline-block h-2 w-2 rounded-full transition-colors duration-300 ${
+                                  log.is_active ? 'bg-emerald-400' : 'bg-zinc-400'
                                 }`}
                               />
                               {log.relay}

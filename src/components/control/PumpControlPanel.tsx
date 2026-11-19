@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { SystemControl } from '@/lib/types/hidroponik';
-import { Zap, Check, Save, Power, Timer, AlertCircle } from 'lucide-react';
+import { Zap, Check, Save, Power, Timer, AlertCircle, Loader2 } from 'lucide-react';
 
 interface CooldownInfo {
   is_in_cooldown: boolean;
@@ -30,7 +30,11 @@ export function PumpControlPanel({
   onUpdateControl,
 }: PumpControlPanelProps) {
   const [successMsg, setSuccessMsg] = useState('');
-  const [loading, setLoading] = useState(false);
+  
+  // State transisi aksi yang sedang aktif (agar ada fase loading halus dan tidak kedut-kedut)
+  const [pendingPumpState, setPendingPumpState] = useState<boolean | null>(null);
+  const [pendingMode, setPendingMode] = useState<'auto' | 'manual' | null>(null);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
 
   // State lokal nilai input
   const [ppmMin, setPpmMin] = useState<string>(String(control.target_ppm_min ?? 560));
@@ -59,22 +63,23 @@ export function PumpControlPanel({
   const isSwitchActive = isManual ? Boolean(control.pump_state) : actualPumpActive;
 
   const handleToggleMode = async (newMode: 'auto' | 'manual') => {
-    setLoading(true);
+    if (control.pump_mode === newMode) return;
+    setPendingMode(newMode);
     try {
       await onUpdateControl({ mode: newMode });
       showNotification(`MODE BERGANTI: ${newMode === 'auto' ? 'OTOMATIS (AUTO)' : 'MANUAL (SAKLAR)'}`);
     } finally {
-      setLoading(false);
+      setPendingMode(null);
     }
   };
 
   const handleTogglePumpState = async (newState: boolean) => {
-    setLoading(true);
+    setPendingPumpState(newState);
     try {
       await onUpdateControl({ mode: 'manual', state: newState });
       showNotification(`SAKLAR MANUAL: POMPA ${newState ? 'DINYALAKAN (ON)' : 'DIMATIKAN (OFF)'}`);
     } finally {
-      setLoading(false);
+      setPendingPumpState(null);
     }
   };
 
@@ -93,7 +98,7 @@ export function PumpControlPanel({
       return;
     }
 
-    setLoading(true);
+    setIsSavingConfig(true);
     try {
       await onUpdateControl({
         target_ppm_min: valMin,
@@ -101,9 +106,9 @@ export function PumpControlPanel({
         cooldown_minutes: valCd,
       });
       setIsDirty(false); // Reset status dirty setelah sukses disimpan
-      showNotification(`KONFIGURASI TERSIMPAN: MIN ${valMin} PPM \u2022 MAX ${valMax} PPM \u2022 JEDA ${valCd}m`);
+      showNotification(`KONFIGURASI TERSIMPAN: MIN ${valMin} PPM • MAX ${valMax} PPM • JEDA ${valCd}m`);
     } finally {
-      setLoading(false);
+      setIsSavingConfig(false);
     }
   };
 
@@ -139,19 +144,27 @@ export function PumpControlPanel({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`px-2.5 py-1 rounded-md font-mono text-xs font-black border ${
-            control.pump_mode === 'auto' 
+          <span className={`px-2.5 py-1 rounded-md font-mono text-xs font-black border transition-all duration-300 ${
+            (pendingMode ? pendingMode === 'auto' : control.pump_mode === 'auto')
               ? 'bg-emerald-100 text-emerald-900 border-emerald-400' 
               : 'bg-zinc-200 text-zinc-900 border-zinc-400'
           }`}>
-            {control.pump_mode === 'auto' ? 'OTOMATIS AKTIF' : 'MANUAL AKTIF'}
+            {pendingMode !== null
+              ? (pendingMode === 'auto' ? 'MENGUBAH AUTO...' : 'MENGUBAH MANUAL...')
+              : (control.pump_mode === 'auto' ? 'OTOMATIS AKTIF' : 'MANUAL AKTIF')}
           </span>
-          <span className={`px-2.5 py-1 rounded-md font-mono text-xs font-black border shadow-xs transition-colors ${
-            isSwitchActive 
-              ? 'bg-emerald-600 text-white border-emerald-700 animate-pulse' 
-              : 'bg-zinc-900 text-white border-zinc-950'
+          <span className={`px-2.5 py-1 rounded-md font-mono text-xs font-black border shadow-xs transition-all duration-300 ${
+            pendingPumpState !== null
+              ? (pendingPumpState ? 'bg-emerald-700 text-white border-emerald-800' : 'bg-rose-700 text-white border-rose-800')
+              : isSwitchActive 
+                ? 'bg-emerald-600 text-white border-emerald-700' 
+                : 'bg-zinc-900 text-white border-zinc-950'
           }`}>
-            {isSwitchActive ? '● POMPA: MENYALA (ON)' : '● POMPA: MATI (OFF)'}
+            {pendingPumpState !== null
+              ? (pendingPumpState ? '● PROSES MENYALA...' : '● PROSES MEMATIKAN...')
+              : isSwitchActive 
+                ? '● POMPA: MENYALA (ON)' 
+                : '● POMPA: MATI (OFF)'}
           </span>
         </div>
       </div>
@@ -203,26 +216,40 @@ export function PumpControlPanel({
             <button
               type="button"
               onClick={() => handleToggleMode('auto')}
-              disabled={loading}
-              className={`py-2 px-3 text-xs font-black rounded-lg border transition cursor-pointer ${
+              disabled={pendingMode !== null || pendingPumpState !== null}
+              className={`flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-black rounded-lg border transition-all duration-200 cursor-pointer ${
                 control.pump_mode === 'auto'
                   ? 'bg-emerald-700 border-emerald-800 text-white shadow-sm ring-2 ring-emerald-500/30'
                   : 'bg-white border-zinc-300 text-zinc-900 hover:bg-zinc-100'
-              }`}
+              } ${pendingMode === 'auto' ? 'opacity-85' : ''}`}
             >
-              OTOMATIS (AUTO)
+              {pendingMode === 'auto' ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  MEMPROSES...
+                </>
+              ) : (
+                'OTOMATIS (AUTO)'
+              )}
             </button>
             <button
               type="button"
               onClick={() => handleToggleMode('manual')}
-              disabled={loading}
-              className={`py-2 px-3 text-xs font-black rounded-lg border transition cursor-pointer ${
+              disabled={pendingMode !== null || pendingPumpState !== null}
+              className={`flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-black rounded-lg border transition-all duration-200 cursor-pointer ${
                 control.pump_mode === 'manual'
                   ? 'bg-zinc-900 border-zinc-950 text-white shadow-sm ring-2 ring-zinc-700/30'
                   : 'bg-white border-zinc-300 text-zinc-900 hover:bg-zinc-100'
-              }`}
+              } ${pendingMode === 'manual' ? 'opacity-85' : ''}`}
             >
-              MANUAL (SAKLAR)
+              {pendingMode === 'manual' ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  MEMPROSES...
+                </>
+              ) : (
+                'MANUAL (SAKLAR)'
+              )}
             </button>
           </div>
         </div>
@@ -236,28 +263,62 @@ export function PumpControlPanel({
             <span className="font-mono text-[10px] font-bold text-zinc-800">Relay Pin 23</span>
           </div>
 
-          <div className="flex items-center justify-between font-mono text-xs bg-white p-2.5 rounded-lg border border-zinc-200">
+          <div className="flex items-center justify-between font-mono text-xs bg-white p-2.5 rounded-lg border border-zinc-200 transition-all duration-200">
             <div className="flex items-center gap-2">
-              <span className={`h-2.5 w-2.5 rounded-full ${isSwitchActive ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'}`} />
+              <span className={`h-2.5 w-2.5 rounded-full transition-colors duration-300 ${
+                pendingPumpState !== null 
+                  ? 'bg-amber-500' 
+                  : isSwitchActive 
+                    ? 'bg-emerald-500' 
+                    : 'bg-zinc-400'
+              }`} />
               <span className="font-bold text-zinc-900">
-                STATUS: <strong className={isSwitchActive ? 'text-emerald-700' : 'text-zinc-600'}>
-                  {isSwitchActive ? 'POMPA MENYALA (ON)' : 'POMPA MATI (OFF)'}
+                STATUS:{' '}
+                <strong className={
+                  pendingPumpState !== null 
+                    ? 'text-amber-700' 
+                    : isSwitchActive 
+                      ? 'text-emerald-700' 
+                      : 'text-zinc-600'
+                }>
+                  {pendingPumpState !== null
+                    ? (pendingPumpState ? 'PROSES MENYALAKAN...' : 'PROSES MEMATIKAN...')
+                    : isSwitchActive 
+                      ? 'POMPA MENYALA (ON)' 
+                      : 'POMPA MATI (OFF)'}
                 </strong>
               </span>
             </div>
-            <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
-              Tersinkron
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-colors duration-200 ${
+              pendingPumpState !== null
+                ? 'text-amber-900 bg-amber-100 border-amber-300'
+                : 'text-emerald-800 bg-emerald-100 border-emerald-300'
+            }`}>
+              {pendingPumpState !== null ? 'Mengirim...' : 'Tersinkron'}
             </span>
           </div>
 
-          {/* 1 Tombol Toggle Tunggal (Cerdas & Anti-Bingung) */}
+          {/* 1 Tombol Toggle Tunggal (Cerdas, Animasi Loading Mulus & Anti-Kedut) */}
           <div className="pt-1 font-mono">
-            {isSwitchActive ? (
+            {pendingPumpState !== null ? (
               <button
                 type="button"
-                disabled={loading}
+                disabled
+                className={`w-full flex items-center justify-center gap-2 py-3 px-4 text-xs sm:text-sm font-black rounded-lg border shadow-sm transition-all duration-200 cursor-wait opacity-90 text-white ${
+                  pendingPumpState
+                    ? 'border-emerald-700 bg-emerald-600 ring-2 ring-emerald-500/30'
+                    : 'border-rose-700 bg-rose-600 ring-2 ring-rose-500/30'
+                }`}
+              >
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {pendingPumpState ? 'MENYALAKAN POMPA...' : 'MEMATIKAN POMPA...'}
+              </button>
+            ) : isSwitchActive ? (
+              <button
+                type="button"
+                disabled={pendingMode !== null || isSavingConfig}
                 onClick={() => handleTogglePumpState(false)}
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 text-xs sm:text-sm font-black rounded-lg border border-rose-700 bg-rose-600 hover:bg-rose-700 text-white shadow-sm ring-2 ring-rose-500/30 transition-all cursor-pointer active:scale-[0.99]"
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 text-xs sm:text-sm font-black rounded-lg border border-rose-700 bg-rose-600 hover:bg-rose-700 text-white shadow-sm ring-2 ring-rose-500/30 transition-all duration-200 cursor-pointer active:scale-[0.99]"
               >
                 <Power className="h-4 w-4" />
                 MATIKAN POMPA (OFF)
@@ -265,18 +326,20 @@ export function PumpControlPanel({
             ) : (
               <button
                 type="button"
-                disabled={loading}
+                disabled={pendingMode !== null || isSavingConfig}
                 onClick={() => handleTogglePumpState(true)}
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 text-xs sm:text-sm font-black rounded-lg border border-emerald-700 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/30 transition-all cursor-pointer active:scale-[0.99]"
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 text-xs sm:text-sm font-black rounded-lg border border-emerald-700 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/30 transition-all duration-200 cursor-pointer active:scale-[0.99]"
               >
                 <Power className="h-4 w-4" />
                 NYALAKAN POMPA (ON)
               </button>
             )}
-            <p className="text-[10px] font-semibold text-zinc-700 text-center mt-1.5">
-              {isSwitchActive 
-                ? '● Pompa sedang AKTIF — Klik tombol untuk mematikan' 
-                : '○ Pompa sedang MATI — Klik tombol untuk menyalakan'}
+            <p className="text-[10px] font-semibold text-zinc-700 text-center mt-1.5 transition-all duration-200">
+              {pendingPumpState !== null
+                ? (pendingPumpState ? 'Sedang mengirim sinyal aktivasi ke pompa...' : 'Sedang mengirim sinyal mati ke pompa...')
+                : isSwitchActive 
+                  ? '● Pompa sedang AKTIF — Klik tombol untuk mematikan' 
+                  : '○ Pompa sedang MATI — Klik tombol untuk menyalakan'}
             </p>
           </div>
         </div>
@@ -291,7 +354,7 @@ export function PumpControlPanel({
                 SETPOINTS &amp; REST WINDOW PARAMETERS
               </span>
               {isDirty && (
-                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded border border-amber-300 animate-pulse">
+                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
                   <AlertCircle className="h-3 w-3" />
                   Ada Perubahan Belum Disimpan
                 </span>
@@ -318,15 +381,24 @@ export function PumpControlPanel({
           <button
             type="button"
             onClick={handleSaveConfig}
-            disabled={loading}
-            className={`flex items-center gap-1.5 self-start sm:self-auto rounded-lg px-3.5 py-1.5 text-xs font-black transition cursor-pointer shadow-xs ${
+            disabled={isSavingConfig || pendingMode !== null || pendingPumpState !== null}
+            className={`flex items-center gap-1.5 self-start sm:self-auto rounded-lg px-3.5 py-1.5 text-xs font-black transition-all duration-200 cursor-pointer shadow-xs ${
               isDirty
                 ? 'bg-amber-600 border border-amber-700 text-white hover:bg-amber-700 ring-2 ring-amber-400/40'
                 : 'bg-emerald-700 border border-emerald-800 text-white hover:bg-emerald-800'
             }`}
           >
-            <Save className="h-3.5 w-3.5" />
-            {isDirty ? 'SIMPAN PERUBAHAN' : 'SIMPAN CONFIG'}
+            {isSavingConfig ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                MENYIMPAN...
+              </>
+            ) : (
+              <>
+                <Save className="h-3.5 w-3.5" />
+                {isDirty ? 'SIMPAN PERUBAHAN' : 'SIMPAN CONFIG'}
+              </>
+            )}
           </button>
         </div>
 
