@@ -878,13 +878,16 @@ export default function DashboardPage() {
                     Catatan riwayat kondisi nutrisi dan pompa (data terbaru di atas)
                   </p>
                   <p className="text-[10px] text-zinc-400 sm:hidden block mt-1 font-sans">
-                    💡 Geser ke samping untuk melihat kolom lainnya &rarr;
+                    💡 Geser ke samping untuk kolom lain &bull; Scroll atas/bawah untuk riwayat lengkap ({logs.length} data)
                   </p>
                 </div>
 
-                <div className="overflow-x-auto max-h-96 rounded-xl border border-zinc-800 bg-[#0d0f12] touch-pan-x">
-                  <table className="w-full min-w-160 text-left text-xs">
-                    <thead className="sticky top-0 bg-[#121418] border-b border-zinc-800 text-zinc-300 font-bold">
+                <div 
+                  className="overflow-auto max-h-[30rem] rounded-xl border border-zinc-800 bg-[#0d0f12] overscroll-contain"
+                  style={{ WebkitOverflowScrolling: 'touch' }}
+                >
+                  <table className="w-full min-w-[580px] text-left text-xs">
+                    <thead className="sticky top-0 z-10 bg-[#121418] border-b border-zinc-800 text-zinc-300 font-bold shadow-xs">
                       <tr>
                         <th className="p-3 whitespace-nowrap">NO</th>
                         <th className="p-3 whitespace-nowrap">WAKTU</th>
