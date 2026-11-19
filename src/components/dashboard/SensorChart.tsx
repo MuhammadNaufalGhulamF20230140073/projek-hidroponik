@@ -23,6 +23,10 @@ interface SensorChartProps {
 export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProps) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
+  // Pastikan targetMin & targetMax selalu angka numerik valid sesuai konfigurasi sistem
+  const numTargetMin = typeof targetMin === 'number' && !Number.isNaN(targetMin) && targetMin > 0 ? targetMin : 560;
+  const numTargetMax = typeof targetMax === 'number' && !Number.isNaN(targetMax) && targetMax > 0 ? targetMax : 840;
+
   // Balik urutan log agar menjadi urutan waktu kronologis (kiri = terlama, kanan = teranyar)
   const data = useMemo(() => {
     return [...logs].reverse();
@@ -46,32 +50,32 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
   const width = 800;
   const height = 230;
   const padLeft = 55;
-  const padRight = 45;
+  const padRight = 35;
   const padTop = 22;
   const padBottom = 32;
 
   const plotWidth = width - padLeft - padRight;
   const plotHeight = height - padTop - padBottom;
 
-  // Rentang Y (Min & Max PPM) dengan padding visual agar grafik tidak mentok
+  // Rentang Y (Min & Max PPM) dengan padding visual agar target min dan max SELALU terlihat jelas
   const { yMin, yMax, yTicks } = useMemo(() => {
-    if (data.length === 0) return { yMin: 0, yMax: 1000, yTicks: [0, 250, 500, 750, 1000] };
+    if (data.length === 0) {
+      const low = Math.min(numTargetMin, 500);
+      const high = Math.max(numTargetMax, 900);
+      return { yMin: low, yMax: high, yTicks: [low, Math.round((low + high) / 2), high] };
+    }
 
     const vals = data.flatMap(d => [d.ppm_filtered, d.ppm_raw]);
-    if (targetMin !== undefined && targetMin > 0) vals.push(targetMin);
-    if (targetMax !== undefined && targetMax > 0) vals.push(targetMax);
+    vals.push(numTargetMin);
+    vals.push(numTargetMax);
 
     let lowest = Math.min(...vals);
     let highest = Math.max(...vals);
 
-    // Berikan ruang padding atas dan bawah minimal 40 PPM
-    const buffer = Math.max((highest - lowest) * 0.15, 30);
-    lowest = Math.max(0, Math.floor((lowest - buffer) / 20) * 20);
-    highest = Math.ceil((highest + buffer) / 20) * 20;
-
-    if (highest - lowest < 80) {
-      highest = lowest + 80;
-    }
+    // Berikan ruang padding atas dan bawah agar garis target tidak mepet di batas tepi
+    const span = Math.max(highest - lowest, 60);
+    lowest = Math.max(0, Math.floor((lowest - span * 0.12) / 20) * 20);
+    highest = Math.ceil((highest + span * 0.12) / 20) * 20;
 
     // 5 gridline horizontal
     const step = (highest - lowest) / 4;
@@ -84,7 +88,7 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
     ];
 
     return { yMin: lowest, yMax: highest, yTicks: ticks };
-  }, [data, targetMin, targetMax]);
+  }, [data, numTargetMin, numTargetMax]);
 
   // Fungsi konversi koordinat Data -> SVG
   const getX = (idx: number) => {
@@ -134,7 +138,6 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
     const svgRect = e.currentTarget.getBoundingClientRect();
     const mouseX = ((e.clientX - svgRect.left) / svgRect.width) * width;
 
-    // Cari titik koordinat X terdekat
     let closestIdx = 0;
     let closestDist = Infinity;
     points.forEach((p, idx) => {
@@ -157,9 +160,9 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
   return (
     <div className="w-full space-y-3 font-mono">
       {/* Header Info Bar & Legend */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 pb-3">
-        {/* Ringkasan Statistik */}
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs font-bold text-zinc-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 pb-3">
+        {/* Ringkasan Parameter & Aktual */}
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 text-xs font-bold text-zinc-800">
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-extrabold">Aktual:</span>
             <span className="text-sm font-black text-emerald-700">
@@ -169,15 +172,21 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
             {stats.trend === 'down' && <TrendingDown className="h-3.5 w-3.5 text-rose-600" />}
             {stats.trend === 'flat' && <Minus className="h-3.5 w-3.5 text-zinc-400" />}
           </div>
-          <div className="hidden sm:flex items-center gap-1 text-[11px]">
-            <span className="text-zinc-500">Min:</span>
-            <span className="font-black text-zinc-900">{stats.min.toFixed(1)}</span>
-            <span className="text-zinc-300">•</span>
-            <span className="text-zinc-500">Max:</span>
-            <span className="font-black text-zinc-900">{stats.max.toFixed(1)}</span>
-            <span className="text-zinc-300">•</span>
-            <span className="text-zinc-500">Rata-rata:</span>
-            <span className="font-black text-zinc-900">{stats.avg.toFixed(1)}</span>
+
+          {/* Ambang Batas Target yang Sesuai Konfigurasi User */}
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-300 text-[10px] font-black">
+              TARGET MIN: {numTargetMin} PPM
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-orange-50 text-orange-900 border border-orange-300 text-[10px] font-black">
+              TARGET MAX: {numTargetMax} PPM
+            </span>
+          </div>
+
+          <div className="hidden lg:flex items-center gap-1 text-[11px] text-zinc-500 font-medium">
+            <span>Buffer:</span>
+            <span className="font-bold text-zinc-800">{stats.min.toFixed(0)} - {stats.max.toFixed(0)} PPM</span>
+            <span>(Avg: {stats.avg.toFixed(0)})</span>
           </div>
         </div>
 
@@ -187,16 +196,10 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
             <span className="h-2 w-3.5 rounded-xs bg-emerald-600 inline-block" />
             PPM Stabil
           </span>
-          <span className="flex items-center gap-1 text-zinc-600">
+          <span className="flex items-center gap-1 text-zinc-500">
             <span className="h-0.5 w-3 border-b-2 border-dashed border-zinc-400 inline-block" />
             PPM Raw
           </span>
-          {targetMin !== undefined && targetMin > 0 && (
-            <span className="flex items-center gap-1 text-amber-800">
-              <span className="h-0.5 w-3 border-b-2 border-dashed border-amber-500 inline-block" />
-              Target ({targetMin}-{targetMax})
-            </span>
-          )}
           <span className="flex items-center gap-1 text-blue-700">
             <span className="h-2 w-2 rounded-full bg-blue-600 inline-block ring-1 ring-blue-300" />
             Pompa ON
@@ -262,49 +265,71 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
                 );
               })}
 
-              {/* 2. Target Reference Lines (Ambang Min & Max) */}
-              {targetMin !== undefined && targetMin >= yMin && targetMin <= yMax && (
+              {/* 2. Target Reference Lines (Ambang Min & Max) dengan Pill Badge Jelas */}
+              {numTargetMin >= yMin && numTargetMin <= yMax && (
                 <g>
                   <line
                     x1={padLeft}
-                    y1={getY(targetMin)}
+                    y1={getY(numTargetMin)}
                     x2={padLeft + plotWidth}
-                    y2={getY(targetMin)}
+                    y2={getY(numTargetMin)}
                     stroke="#f59e0b"
-                    strokeWidth="1.2"
-                    strokeDasharray="4 3"
+                    strokeWidth="1.5"
+                    strokeDasharray="5 3"
+                  />
+                  <rect
+                    x={padLeft + 8}
+                    y={getY(numTargetMin) - 9}
+                    width="104"
+                    height="18"
+                    rx="4"
+                    fill="#fef3c7"
+                    stroke="#f59e0b"
+                    strokeWidth="1"
                   />
                   <text
-                    x={padLeft + plotWidth + 4}
-                    y={getY(targetMin) + 3}
-                    fontSize="8.5"
-                    fill="#b45309"
+                    x={padLeft + 60}
+                    y={getY(numTargetMin) + 3.5}
+                    textAnchor="middle"
+                    fill="#92400e"
+                    fontSize="9"
                     fontWeight="bold"
                   >
-                    MIN {targetMin}
+                    MIN: {numTargetMin} PPM (ON)
                   </text>
                 </g>
               )}
 
-              {targetMax !== undefined && targetMax >= yMin && targetMax <= yMax && (
+              {numTargetMax >= yMin && numTargetMax <= yMax && (
                 <g>
                   <line
                     x1={padLeft}
-                    y1={getY(targetMax)}
+                    y1={getY(numTargetMax)}
                     x2={padLeft + plotWidth}
-                    y2={getY(targetMax)}
+                    y2={getY(numTargetMax)}
                     stroke="#ea580c"
-                    strokeWidth="1.2"
-                    strokeDasharray="4 3"
+                    strokeWidth="1.5"
+                    strokeDasharray="5 3"
+                  />
+                  <rect
+                    x={padLeft + 8}
+                    y={getY(numTargetMax) - 9}
+                    width="110"
+                    height="18"
+                    rx="4"
+                    fill="#ffedd5"
+                    stroke="#ea580c"
+                    strokeWidth="1"
                   />
                   <text
-                    x={padLeft + plotWidth + 4}
-                    y={getY(targetMax) + 3}
-                    fontSize="8.5"
-                    fill="#c2410c"
+                    x={padLeft + 63}
+                    y={getY(numTargetMax) + 3.5}
+                    textAnchor="middle"
+                    fill="#9a3412"
+                    fontSize="9"
                     fontWeight="bold"
                   >
-                    MAX {targetMax}
+                    MAX: {numTargetMax} PPM (OFF)
                   </text>
                 </g>
               )}

@@ -557,8 +557,8 @@ export default function DashboardPage() {
                 </div>
                 <SensorChart
                   logs={logs}
-                  targetMin={controlState.target_ppm_min}
-                  targetMax={controlState.target_ppm_max}
+                  targetMin={Number(controlState.target_ppm_min ?? 560)}
+                  targetMax={Number(controlState.target_ppm_max ?? 840)}
                 />
               </div>
             </>
