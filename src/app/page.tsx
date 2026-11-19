@@ -22,9 +22,12 @@ interface LogItem {
 }
 
 interface CooldownInfo {
+  enabled?: boolean;
   is_in_cooldown: boolean;
   remaining_seconds: number;
   remaining_minutes: number;
+  max_cycles?: number;
+  current_cycles?: number;
 }
 
 const LOGO_SRC = '/Bagas%20Hidrponik.jpg';
@@ -421,7 +424,7 @@ export default function DashboardPage() {
 
           {/* Sisi Kanan: Status Koneksi & Tombol Refresh */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            {cooldown.is_in_cooldown && (
+            {cooldown.is_in_cooldown && cooldown.enabled !== false && (
               <span className="hidden lg:inline-flex text-[10px] font-mono font-bold text-amber-800 bg-amber-50 px-2 py-1 rounded-md border border-amber-300">
                 JEDA: {Math.floor(cooldown.remaining_seconds / 60)}m {(cooldown.remaining_seconds % 60).toString().padStart(2, '0')}s
               </span>

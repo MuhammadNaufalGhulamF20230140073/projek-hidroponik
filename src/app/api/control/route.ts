@@ -29,6 +29,8 @@ export async function POST(req: Request) {
     const target_ppm_min = body.target_ppm_min !== undefined ? Number(body.target_ppm_min) : undefined;
     const target_ppm_max = body.target_ppm_max !== undefined ? Number(body.target_ppm_max) : undefined;
     const cooldown_minutes = body.cooldown_minutes !== undefined ? Number(body.cooldown_minutes) : undefined;
+    const cooldown_enabled = body.cooldown_enabled !== undefined ? Boolean(body.cooldown_enabled) : undefined;
+    const cooldown_max_cycles = body.cooldown_max_cycles !== undefined ? Math.max(1, Number(body.cooldown_max_cycles)) : undefined;
     // Cooldown TETAP berjalan dan tidak di-reset otomatis saat ubah angka/mode
     const reset_cooldown = Boolean(body.reset_cooldown);
 
@@ -38,6 +40,8 @@ export async function POST(req: Request) {
       target_ppm_min,
       target_ppm_max,
       cooldown_minutes,
+      cooldown_enabled,
+      cooldown_max_cycles,
       reset_cooldown,
     });
 

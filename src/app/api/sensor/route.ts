@@ -16,15 +16,27 @@ export async function GET() {
     const diffSeconds = logTime > 0 ? Math.round((nowServer - logTime) / 1000) : 9999;
     const is_online = Boolean(latest && diffSeconds >= 0 && diffSeconds <= 15);
 
-    // 2. Hitung sisa waktu Cooldown 1 Jam (dalam detik & menit)
+    // 2. Hitung sisa waktu Cooldown & Batasan Siklus (Rate Limiting)
+    let is_in_cooldown = false;
     let cooldown_remaining_seconds = 0;
+    const isCooldownEnabled = control.cooldown_enabled !== false;
     const cooldownTotalSeconds = (control.cooldown_minutes || 60) * 60;
+    const maxCycles = control.cooldown_max_cycles || 1;
+    const currentCycles = control.cycle_count || 0;
 
-    if (control.last_dosing_at) {
-      const lastDosingMs = new Date(control.last_dosing_at).getTime();
-      const elapsedSeconds = Math.round((nowServer - lastDosingMs) / 1000);
-      if (elapsedSeconds < cooldownTotalSeconds) {
-        cooldown_remaining_seconds = cooldownTotalSeconds - elapsedSeconds;
+    if (isCooldownEnabled) {
+      const windowStartMs = control.window_started_at
+        ? new Date(control.window_started_at).getTime()
+        : (control.last_dosing_at ? new Date(control.last_dosing_at).getTime() : 0);
+
+      if (windowStartMs > 0) {
+        const elapsedSeconds = Math.round((nowServer - windowStartMs) / 1000);
+        if (elapsedSeconds < cooldownTotalSeconds) {
+          if (currentCycles >= maxCycles) {
+            is_in_cooldown = true;
+            cooldown_remaining_seconds = cooldownTotalSeconds - elapsedSeconds;
+          }
+        }
       }
     }
 
@@ -41,9 +53,12 @@ export async function GET() {
       is_online,
       last_seen_seconds: diffSeconds,
       cooldown: {
-        is_in_cooldown: cooldown_remaining_seconds > 0,
+        enabled: isCooldownEnabled,
+        is_in_cooldown,
         remaining_seconds: cooldown_remaining_seconds,
         remaining_minutes: Math.ceil(cooldown_remaining_seconds / 60),
+        max_cycles: maxCycles,
+        current_cycles: currentCycles,
       },
     });
   } catch (error: any) {
@@ -80,36 +95,58 @@ export async function POST(req: Request) {
     });
 
     let control = await getSystemControl();
+    const isCooldownEnabled = control.cooldown_enabled !== false;
     const cooldownTotalSeconds = (control.cooldown_minutes || 60) * 60;
+    const maxCycles = control.cooldown_max_cycles || 1;
     const nowServerPost = Date.now();
 
-    // Hitung apakah saat ini sedang dalam cooldown
+    // Hitung apakah saat ini sedang dalam cooldown & batas siklus
     let isCurrentlyInCooldown = false;
     let cooldown_remaining_seconds = 0;
-    if (control.last_dosing_at) {
-      const lastDosingMs = new Date(control.last_dosing_at).getTime();
-      const elapsed = Math.round((nowServerPost - lastDosingMs) / 1000);
-      if (elapsed < cooldownTotalSeconds) {
-        isCurrentlyInCooldown = true;
-        cooldown_remaining_seconds = cooldownTotalSeconds - elapsed;
-      }
-    }
 
-    // RATE LIMITING / MAX 1 KALI PER PERIODE:
-    // Kunci timestamp siklus sejak pompa MULAI aktif memompa (jika belum dalam cooldown)
-    if ((dosing_started || (status_pompa && control.pump_mode === 'auto')) && !isCurrentlyInCooldown) {
-      control = await updatePumpControl({
-        last_dosing_at: new Date().toISOString(),
-      });
-      isCurrentlyInCooldown = true;
-      cooldown_remaining_seconds = cooldownTotalSeconds;
-    } else if (dosing_completed && !isCurrentlyInCooldown) {
-      // Fallback jika laporan start terlewat
-      control = await updatePumpControl({
-        last_dosing_at: new Date().toISOString(),
-      });
-      isCurrentlyInCooldown = true;
-      cooldown_remaining_seconds = cooldownTotalSeconds;
+    if (isCooldownEnabled) {
+      const windowStartMs = control.window_started_at
+        ? new Date(control.window_started_at).getTime()
+        : (control.last_dosing_at ? new Date(control.last_dosing_at).getTime() : 0);
+      const elapsed = windowStartMs > 0 ? Math.round((nowServerPost - windowStartMs) / 1000) : 999999;
+      const currentCycles = control.cycle_count || 0;
+
+      if (windowStartMs > 0 && elapsed < cooldownTotalSeconds) {
+        if (currentCycles >= maxCycles) {
+          isCurrentlyInCooldown = true;
+          cooldown_remaining_seconds = cooldownTotalSeconds - elapsed;
+        }
+      }
+
+      // RATE LIMITING / PENGATURAN FREKUENSI SIKLUS PER JENDELA WAKTU:
+      if ((dosing_started || (status_pompa && control.pump_mode === 'auto')) && !isCurrentlyInCooldown) {
+        if (windowStartMs === 0 || elapsed >= cooldownTotalSeconds) {
+          // Mulai jendela waktu baru
+          const newCycles = 1;
+          const willLock = newCycles >= maxCycles;
+          control = await updatePumpControl({
+            window_started_at: new Date().toISOString(),
+            cycle_count: newCycles,
+            last_dosing_at: new Date().toISOString(),
+          });
+          if (willLock) {
+            isCurrentlyInCooldown = true;
+            cooldown_remaining_seconds = cooldownTotalSeconds;
+          }
+        } else if (currentCycles < maxCycles) {
+          // Tambah siklus dalam jendela waktu yang aktif
+          const newCycles = currentCycles + 1;
+          const willLock = newCycles >= maxCycles;
+          control = await updatePumpControl({
+            cycle_count: newCycles,
+            last_dosing_at: new Date().toISOString(),
+          });
+          if (willLock) {
+            isCurrentlyInCooldown = true;
+            cooldown_remaining_seconds = cooldownTotalSeconds - elapsed;
+          }
+        }
+      }
     }
 
     return NextResponse.json({
@@ -123,6 +160,9 @@ export async function POST(req: Request) {
         target_ppm_min: Number(control.target_ppm_min ?? 560),
         target_ppm_max: Number(control.target_ppm_max ?? 840),
         cooldown_minutes: Number(control.cooldown_minutes ?? 60),
+        cooldown_enabled: isCooldownEnabled,
+        cooldown_max_cycles: maxCycles,
+        cycle_count: Number(control.cycle_count ?? 0),
         in_cooldown: isCurrentlyInCooldown,
         cooldown_remaining_seconds: cooldown_remaining_seconds,
       },

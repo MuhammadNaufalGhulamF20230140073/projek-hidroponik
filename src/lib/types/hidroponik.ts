@@ -15,6 +15,10 @@ export interface SystemControl {
   target_ppm_min: number;
   target_ppm_max: number;
   cooldown_minutes: number;
+  cooldown_enabled?: boolean;
+  cooldown_max_cycles?: number;
+  cycle_count?: number;
+  window_started_at?: string;
   last_dosing_at?: string;
   updated_at?: string;
 }
