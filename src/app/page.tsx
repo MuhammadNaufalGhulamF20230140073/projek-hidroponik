@@ -574,23 +574,23 @@ export default function DashboardPage() {
                   <div className="border-b border-zinc-200 pb-3">
                     <h2 className="font-mono text-xs font-black tracking-wider text-zinc-950 flex items-center gap-1.5 uppercase">
                       <Sliders className="h-4 w-4 shrink-0 text-emerald-800" />
-                      ATURAN PENYIRAMAN &amp; AMBANG BATAS
+                      TARGET PPM (MIN / MAX) &amp; COOLDOWN
                     </h2>
                     <p className="font-mono text-xs text-zinc-800 mt-0.5 font-bold">
-                      Aturan batas penyiraman otomatis dan jeda istirahat pompa
+                      Parameter batas pompa otomatis (Target Min, Max &amp; Cooldown)
                     </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 sm:gap-4 font-mono">
                     <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4">
-                      <span className="text-[10px] font-black text-zinc-800 uppercase">Batas Bawah (Pompa ON)</span>
+                      <span className="text-[10px] font-black text-zinc-800 uppercase">Target PPM Min (ON)</span>
                       <div className="text-lg sm:text-xl font-black text-zinc-950 mt-1">
                         {controlState.target_ppm_min}{' '}
                         <span className="text-xs font-bold text-zinc-800">PPM</span>
                       </div>
                     </div>
                     <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4">
-                      <span className="text-[10px] font-black text-zinc-800 uppercase">Batas Atas Target (Pompa OFF)</span>
+                      <span className="text-[10px] font-black text-zinc-800 uppercase">Target PPM Max (OFF)</span>
                       <div className="text-lg sm:text-xl font-black text-zinc-950 mt-1">
                         {controlState.target_ppm_max}{' '}
                         <span className="text-xs font-bold text-zinc-800">PPM</span>
@@ -599,7 +599,7 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 font-mono">
-                    <span className="text-[10px] font-black text-zinc-800 uppercase">Jeda Istirahat Pompa</span>
+                    <span className="text-[10px] font-black text-zinc-800 uppercase">Cooldown Time</span>
                     <div className="text-base sm:text-lg font-black text-zinc-950 mt-0.5">
                       {controlState.cooldown_minutes} Menit{' '}
                       <span className="text-xs font-bold text-zinc-800">

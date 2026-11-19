@@ -94,7 +94,7 @@ export function PumpControlPanel({
     }
 
     if (valMin >= valMax) {
-      alert('Peringatan: Nilai Batas Minimum harus lebih kecil dari Batas Target Maksimum!');
+      alert('Peringatan: Nilai Target Min harus lebih kecil dari Target Max!');
       return;
     }
 
@@ -345,7 +345,7 @@ export function PumpControlPanel({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-extrabold text-zinc-700 uppercase tracking-wider block">
-                BATAS TAKARAN NUTRISI &amp; JEDA POMPA
+                TARGET PPM (MIN / MAX) &amp; COOLDOWN
               </span>
               {isDirty && (
                 <span className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
@@ -355,7 +355,7 @@ export function PumpControlPanel({
               )}
             </div>
             <p className="text-xs text-zinc-600 font-semibold mt-0.5">
-              Tentukan batas kepekatan nutrisi otomatis dan waktu istirahat pompa
+              Atur parameter Target Min, Target Max, dan durasi Cooldown pompa
             </p>
           </div>
           <button
@@ -384,7 +384,7 @@ export function PumpControlPanel({
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-zinc-800 uppercase block">Batas Bawah (Pompa Mulai Hidup)</label>
+            <label className="text-[10px] font-bold text-zinc-800 uppercase block">Target PPM Min (Pompa ON)</label>
             <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
               <input
                 type="number"
@@ -399,11 +399,11 @@ export function PumpControlPanel({
               />
               <span className="text-xs font-bold text-zinc-700 ml-2">PPM</span>
             </div>
-            <span className="text-[10px] text-zinc-700 font-semibold block">Pompa hidup jika nutrisi &lt; angka ini</span>
+            <span className="text-[10px] text-zinc-700 font-semibold block">Pompa ON otomatis saat PPM &lt; angka ini</span>
           </div>
 
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-zinc-800 uppercase block">Batas Atas Target (Pompa Mati)</label>
+            <label className="text-[10px] font-bold text-zinc-800 uppercase block">Target PPM Max (Pompa OFF)</label>
             <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
               <input
                 type="number"
@@ -418,11 +418,11 @@ export function PumpControlPanel({
               />
               <span className="text-xs font-bold text-zinc-700 ml-2">PPM</span>
             </div>
-            <span className="text-[10px] text-zinc-700 font-semibold block">Pompa mati jika nutrisi naik &gt;= ini</span>
+            <span className="text-[10px] text-zinc-700 font-semibold block">Pompa OFF otomatis saat PPM &gt;= angka ini</span>
           </div>
 
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-zinc-800 uppercase block">Jeda Istirahat Pompa</label>
+            <label className="text-[10px] font-bold text-zinc-800 uppercase block">Cooldown Time (Jeda Istirahat)</label>
             <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
               <input
                 type="number"

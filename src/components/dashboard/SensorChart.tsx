@@ -197,13 +197,13 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
             {stats.trend === 'flat' && <Minus className="h-3.5 w-3.5 text-zinc-400" />}
           </div>
 
-          {/* Ambang Batas Target yang Sesuai Konfigurasi User */}
+          {/* Target Min & Max yang Sesuai Konfigurasi User */}
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-300 text-[10px] font-black">
-              BATAS BAWAH: {numTargetMin} PPM
+              TARGET MIN: {numTargetMin} PPM
             </span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-orange-50 text-orange-900 border border-orange-300 text-[10px] font-black">
-              BATAS ATAS: {numTargetMax} PPM
+              TARGET MAX: {numTargetMax} PPM
             </span>
           </div>
 
@@ -307,7 +307,7 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
                   <rect
                     x={padLeft + 8}
                     y={getY(numTargetMin) - 9}
-                    width="128"
+                    width="116"
                     height="18"
                     rx="4"
                     fill="#fef3c7"
@@ -315,14 +315,14 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
                     strokeWidth="1"
                   />
                   <text
-                    x={padLeft + 72}
+                    x={padLeft + 66}
                     y={getY(numTargetMin) + 3.5}
                     textAnchor="middle"
                     fill="#92400e"
                     fontSize="9"
                     fontWeight="bold"
                   >
-                    BATAS BAWAH: {numTargetMin} PPM
+                    TARGET MIN: {numTargetMin} PPM
                   </text>
                 </g>
               )}
@@ -341,7 +341,7 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
                   <rect
                     x={padLeft + 8}
                     y={getY(numTargetMax) - 9}
-                    width="124"
+                    width="116"
                     height="18"
                     rx="4"
                     fill="#ffedd5"
@@ -349,14 +349,14 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
                     strokeWidth="1"
                   />
                   <text
-                    x={padLeft + 70}
+                    x={padLeft + 66}
                     y={getY(numTargetMax) + 3.5}
                     textAnchor="middle"
                     fill="#9a3412"
                     fontSize="9"
                     fontWeight="bold"
                   >
-                    BATAS ATAS: {numTargetMax} PPM
+                    TARGET MAX: {numTargetMax} PPM
                   </text>
                 </g>
               )}

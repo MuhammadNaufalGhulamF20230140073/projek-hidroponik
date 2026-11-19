@@ -50,7 +50,7 @@ export function Sidebar({ isOpen, onClose, activeTab, setActiveTab, isOnline = t
     {
       id: 'control' as const,
       label: 'Pengaturan & Saklar Pompa',
-      desc: 'Saklar pompa manual & batas takaran',
+      desc: 'Saklar pompa manual & Target Min/Max',
       badge: 'KONTROL',
       icon: <Sliders className="h-5 w-5 shrink-0" />,
     },
