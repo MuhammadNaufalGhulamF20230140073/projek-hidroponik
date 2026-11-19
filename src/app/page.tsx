@@ -11,6 +11,7 @@ import { RefreshCw, Database, Cpu, Sliders, Menu, X, Activity, History, Droplets
 import { SystemControl } from '@/lib/types/hidroponik';
 import { ManualSafetyAlertModal } from '@/components/control/ManualSafetyAlertModal';
 import { UnsavedChangesModal } from '@/components/control/UnsavedChangesModal';
+import { DeviceOfflineModal } from '@/components/control/DeviceOfflineModal';
 
 interface LogItem {
   packet_id: string;
@@ -137,6 +138,9 @@ export default function DashboardPage() {
   const [isSavingConfigFromAlert, setIsSavingConfigFromAlert] = useState(false);
   const pumpControlSaveRef = useRef<(() => Promise<boolean>) | null>(null);
   const pumpControlDiscardRef = useRef<(() => void) | null>(null);
+
+  // State untuk Pop-up Peringatan Alat Fisik Offline (Semua fitur terkunci)
+  const [showOfflineModal, setShowOfflineModal] = useState(false);
 
   // Mencegah race-condition polling background menimpa state transisi user (anti-kedut)
   const lastControlUpdateRef = useRef<number>(0);
@@ -332,6 +336,12 @@ export default function DashboardPage() {
     cooldown_max_cycles?: number;
     reset_cooldown?: boolean;
   }) => {
+    // Kunci semua aksi kontrol jika alat fisik offline
+    if (!telemetry.isOnline) {
+      setShowOfflineModal(true);
+      throw new Error('Alat fisik hidroponik tidak terhubung (offline). Tolong periksa alat fisik.');
+    }
+
     lastControlUpdateRef.current = Date.now();
 
     const optimisticState: SystemControl = {
@@ -435,7 +445,14 @@ export default function DashboardPage() {
       return;
     }
 
-    // 2. Jika sistem saat ini dalam posisi MANUAL dan user berpindah ke tab lain (dashboard atau history):
+    // 2. Jika user masuk ke tab kontrol tapi alat fisik offline, kunci fitur dan munculkan pop-up
+    if (tab === 'control' && !telemetry.isOnline) {
+      setActiveTab('control');
+      setShowOfflineModal(true);
+      return;
+    }
+
+    // 3. Jika sistem saat ini dalam posisi MANUAL dan user berpindah ke tab lain (dashboard atau history):
     if (tab !== 'control' && isManualMode) {
       setPendingTargetTab(tab);
       setShowManualAlert(true);
@@ -557,6 +574,15 @@ export default function DashboardPage() {
         isSaving={isSavingConfigFromAlert}
       />
 
+      {/* Pop-up Alert Jika Alat Fisik Offline (Semua fitur kontrol dikunci) */}
+      <DeviceOfflineModal
+        isOpen={showOfflineModal}
+        onClose={() => setShowOfflineModal(false)}
+        onCheckConnection={() => syncAllData(true)}
+        isChecking={isRefreshing}
+        lastSeenSeconds={telemetry.lastSeenSeconds}
+      />
+
       {/* Pop-up Menu Navigasi (Muncul saat tombol MENU diklik, tidak memenuhi layar) */}
       <Sidebar
         isOpen={mobileMenuOpen}
@@ -633,18 +659,25 @@ export default function DashboardPage() {
               </span>
             )}
 
-            {/* Indikator Online/Offline Responsif */}
-            <div className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg border text-[10px] sm:text-xs font-mono font-bold ${
-              telemetry.isOnline 
-                ? 'bg-emerald-50 text-emerald-900 border-emerald-300' 
-                : 'bg-rose-50 text-rose-900 border-rose-300'
-            }`}>
+            {/* Indikator Online/Offline Responsif (Bisa diklik jika offline untuk panduan periksa fisik) */}
+            <button
+              type="button"
+              onClick={() => {
+                if (!telemetry.isOnline) setShowOfflineModal(true);
+              }}
+              title={telemetry.isOnline ? 'Alat fisik ESP32 terhubung aktif' : 'Alat terputus. Klik untuk panduan periksa alat fisik'}
+              className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg border text-[10px] sm:text-xs font-mono font-bold transition cursor-pointer ${
+                telemetry.isOnline 
+                  ? 'bg-emerald-50 text-emerald-900 border-emerald-300' 
+                  : 'bg-rose-50 text-rose-900 border-rose-300 hover:bg-rose-100 ring-2 ring-rose-400/30 active:scale-95'
+              }`}
+            >
               <span className={`h-2 w-2 rounded-full ${
                 telemetry.isOnline ? 'bg-emerald-600 animate-pulse' : 'bg-rose-600'
               }`} />
-              <span className="hidden sm:inline">{telemetry.isOnline ? 'ALAT TERHUBUNG' : 'TERPUTUS'}</span>
+              <span className="hidden sm:inline">{telemetry.isOnline ? 'ALAT TERHUBUNG' : 'TERPUTUS (CEK FISIK)'}</span>
               <span className="sm:hidden">{telemetry.isOnline ? 'ONLINE' : 'OFFLINE'}</span>
-            </div>
+            </button>
 
             {/* Tombol Refresh Data */}
             <button
@@ -830,6 +863,8 @@ export default function DashboardPage() {
                 control={controlState}
                 actualPumpActive={telemetry.actualPumpActive}
                 cooldownInfo={cooldown}
+                isOnline={telemetry.isOnline}
+                onTriggerOfflineModal={() => setShowOfflineModal(true)}
                 onUpdateControl={handleUpdateControl}
                 onDirtyChange={setIsConfigDirty}
                 saveRef={pumpControlSaveRef}

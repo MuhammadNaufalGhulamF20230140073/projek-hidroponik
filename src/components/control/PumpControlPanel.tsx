@@ -13,7 +13,10 @@ import {
   Sliders, 
   Settings2, 
   ChevronDown,
-  RotateCcw
+  RotateCcw,
+  WifiOff,
+  AlertTriangle,
+  Lock
 } from 'lucide-react';
 
 interface CooldownInfo {
@@ -29,6 +32,8 @@ interface PumpControlPanelProps {
   control: SystemControl;
   actualPumpActive: boolean;
   cooldownInfo?: CooldownInfo;
+  isOnline?: boolean;
+  onTriggerOfflineModal?: () => void;
   onUpdateControl: (params: {
     mode?: 'auto' | 'manual';
     state?: boolean;
@@ -48,6 +53,8 @@ export function PumpControlPanel({
   control,
   actualPumpActive,
   cooldownInfo,
+  isOnline = true,
+  onTriggerOfflineModal,
   onUpdateControl,
   onDirtyChange,
   saveRef,
@@ -100,6 +107,10 @@ export function PumpControlPanel({
   const isSwitchActive = isManual ? Boolean(control.pump_state) : actualPumpActive;
 
   const handleToggleMode = async (newMode: 'auto' | 'manual') => {
+    if (!isOnline) {
+      onTriggerOfflineModal?.();
+      return;
+    }
     if (control.pump_mode === newMode) return;
     setPendingMode(newMode);
     try {
@@ -115,6 +126,10 @@ export function PumpControlPanel({
   };
 
   const handleTogglePumpState = async (newState: boolean) => {
+    if (!isOnline) {
+      onTriggerOfflineModal?.();
+      return;
+    }
     setPendingPumpState(newState);
     try {
       await onUpdateControl({ mode: 'manual', state: newState });
@@ -134,6 +149,10 @@ export function PumpControlPanel({
   };
 
   const handleSaveConfig = async (): Promise<boolean> => {
+    if (!isOnline) {
+      onTriggerOfflineModal?.();
+      return false;
+    }
     const valMin = parseFloat(ppmMin);
     const valMax = parseFloat(ppmMax);
     const valCd = parseInt(cooldownMins, 10);
@@ -250,6 +269,35 @@ export function PumpControlPanel({
         </div>
       </div>
 
+      {/* Banner Peringatan Menonjol Jika Alat Fisik Offline */}
+      {!isOnline && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 rounded-xl border-2 border-rose-400 bg-rose-50 text-rose-950 font-sans shadow-2xs animate-in fade-in duration-200">
+          <div className="flex items-start gap-2.5">
+            <div className="p-2 rounded-lg bg-rose-100 text-rose-700 shrink-0 mt-0.5">
+              <WifiOff className="h-5 w-5 animate-pulse" />
+            </div>
+            <div>
+              <span className="text-xs font-black uppercase font-mono tracking-wide text-rose-950 flex items-center gap-1.5">
+                <Lock className="h-3.5 w-3.5 text-rose-600" />
+                SEMUA FITUR KONTROL TERKUNCI (ALAT OFFLINE)
+              </span>
+              <p className="text-[11px] font-semibold text-rose-800 mt-0.5 leading-snug">
+                ESP32 tidak terhubung. Saklar pompa, mode operasi, dan pengaturan dikunci otomatis demi keamanan.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onTriggerOfflineModal}
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-700 hover:bg-rose-800 active:scale-95 text-white font-mono text-xs font-black shadow-xs cursor-pointer shrink-0 transition"
+          >
+            <AlertTriangle className="h-3.5 w-3.5" />
+            <span>TOLONG PERIKSA ALAT FISIK</span>
+          </button>
+        </div>
+      )}
+
       {/* Notifikasi Cepat */}
       {successMsg && (
         <div className="flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-900 shadow-2xs animate-in fade-in duration-150">
@@ -267,8 +315,10 @@ export function PumpControlPanel({
           <button
             type="button"
             onClick={() => handleToggleMode('auto')}
-            disabled={pendingMode !== null || pendingPumpState !== null}
-            className={`flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer ${
+            disabled={pendingMode !== null || pendingPumpState !== null || !isOnline}
+            className={`flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-bold rounded-lg transition-all duration-200 ${
+              !isOnline ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+            } ${
               control.pump_mode === 'auto'
                 ? 'bg-emerald-700 text-white shadow-xs font-extrabold'
                 : 'text-zinc-700 hover:text-zinc-950 hover:bg-white/60'
@@ -285,8 +335,10 @@ export function PumpControlPanel({
           <button
             type="button"
             onClick={() => handleToggleMode('manual')}
-            disabled={pendingMode !== null || pendingPumpState !== null}
-            className={`flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer ${
+            disabled={pendingMode !== null || pendingPumpState !== null || !isOnline}
+            className={`flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-bold rounded-lg transition-all duration-200 ${
+              !isOnline ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+            } ${
               control.pump_mode === 'manual'
                 ? 'bg-zinc-900 text-white shadow-xs font-extrabold'
                 : 'text-zinc-700 hover:text-zinc-950 hover:bg-white/60'
@@ -375,9 +427,11 @@ export function PumpControlPanel({
             ) : isSwitchActive ? (
               <button
                 type="button"
-                disabled={pendingMode !== null || isSavingConfig}
+                disabled={pendingMode !== null || isSavingConfig || !isOnline}
                 onClick={() => handleTogglePumpState(false)}
-                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 text-xs sm:text-sm font-extrabold rounded-xl border border-rose-700 bg-rose-600 hover:bg-rose-700 text-white shadow-xs ring-2 ring-rose-500/25 transition-all duration-200 cursor-pointer active:scale-[0.98]"
+                className={`w-full flex items-center justify-center gap-2 py-3.5 px-4 text-xs sm:text-sm font-extrabold rounded-xl border border-rose-700 bg-rose-600 hover:bg-rose-700 text-white shadow-xs ring-2 ring-rose-500/25 transition-all duration-200 ${
+                  !isOnline ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer active:scale-[0.98]'
+                }`}
               >
                 <Power className="h-4 w-4" />
                 MATIKAN POMPA (OFF)
@@ -385,9 +439,11 @@ export function PumpControlPanel({
             ) : (
               <button
                 type="button"
-                disabled={pendingMode !== null || isSavingConfig}
+                disabled={pendingMode !== null || isSavingConfig || !isOnline}
                 onClick={() => handleTogglePumpState(true)}
-                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 text-xs sm:text-sm font-extrabold rounded-xl border border-emerald-700 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs ring-2 ring-emerald-500/25 transition-all duration-200 cursor-pointer active:scale-[0.98]"
+                className={`w-full flex items-center justify-center gap-2 py-3.5 px-4 text-xs sm:text-sm font-extrabold rounded-xl border border-emerald-700 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs ring-2 ring-emerald-500/25 transition-all duration-200 ${
+                  !isOnline ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer active:scale-[0.98]'
+                }`}
               >
                 <Power className="h-4 w-4" />
                 NYALAKAN POMPA (ON)
@@ -585,13 +641,13 @@ export function PumpControlPanel({
 
                   {/* Tombol Simpan & Batal (Di atas konfigurasi agar tidak ribet scroll jauh) */}
                   <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 font-mono text-xs">
-                    {/* Tombol Batal: hanya aktif jika isDirty */}
+                    {/* Tombol Batal: hanya aktif jika isDirty dan isOnline */}
                     <button
                       type="button"
                       onClick={handleDiscardChanges}
-                      disabled={!isDirty || isSavingConfig}
+                      disabled={!isDirty || isSavingConfig || !isOnline}
                       className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all duration-150 ${
-                        isDirty && !isSavingConfig
+                        isDirty && !isSavingConfig && isOnline
                           ? 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 cursor-pointer shadow-2xs active:scale-95'
                           : 'border-zinc-200 bg-zinc-100 text-zinc-400 cursor-not-allowed opacity-50'
                       }`}
@@ -601,17 +657,17 @@ export function PumpControlPanel({
                       <span>BATAL</span>
                     </button>
 
-                    {/* Tombol Simpan: NGEBLOK jika tidak ada perubahan (!isDirty) untuk meminimalisir spam */}
+                    {/* Tombol Simpan: NGEBLOK jika tidak ada perubahan (!isDirty) atau jika offline */}
                     <button
                       type="button"
                       onClick={handleSaveConfig}
-                      disabled={!isDirty || isSavingConfig || pendingMode !== null || pendingPumpState !== null}
+                      disabled={!isDirty || isSavingConfig || pendingMode !== null || pendingPumpState !== null || !isOnline}
                       className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 ${
-                        isDirty && !isSavingConfig
+                        isDirty && !isSavingConfig && isOnline
                           ? 'bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs cursor-pointer active:scale-95 ring-2 ring-emerald-500/20 font-black'
                           : 'bg-zinc-200 border border-zinc-200 text-zinc-400 cursor-not-allowed opacity-60'
                       }`}
-                      title={isDirty ? 'Simpan perubahan ke alat ESP32' : 'Tidak ada perubahan untuk disimpan'}
+                      title={!isOnline ? 'Alat offline: Kontrol terkunci' : isDirty ? 'Simpan perubahan ke alat ESP32' : 'Tidak ada perubahan untuk disimpan'}
                     >
                       {isSavingConfig ? (
                         <>
@@ -635,13 +691,17 @@ export function PumpControlPanel({
                     <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
                       <input
                         type="number"
+                        disabled={!isOnline}
                         value={ppmMin}
+                        onClick={() => {
+                          if (!isOnline) onTriggerOfflineModal?.();
+                        }}
                         onChange={(e) => {
                           setPpmMin(e.target.value);
                           setIsDirty(true);
                         }}
                         onKeyDown={handleKeyDown}
-                        className="w-full bg-transparent text-sm font-bold text-zinc-950 focus:outline-none"
+                        className={`w-full bg-transparent text-sm font-bold text-zinc-950 focus:outline-none ${!isOnline ? 'cursor-not-allowed text-zinc-400' : ''}`}
                         placeholder="560"
                       />
                       <span className="text-xs font-bold text-zinc-700 ml-2">PPM</span>
@@ -654,13 +714,17 @@ export function PumpControlPanel({
                     <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
                       <input
                         type="number"
+                        disabled={!isOnline}
                         value={ppmMax}
+                        onClick={() => {
+                          if (!isOnline) onTriggerOfflineModal?.();
+                        }}
                         onChange={(e) => {
                           setPpmMax(e.target.value);
                           setIsDirty(true);
                         }}
                         onKeyDown={handleKeyDown}
-                        className="w-full bg-transparent text-sm font-bold text-zinc-950 focus:outline-none"
+                        className={`w-full bg-transparent text-sm font-bold text-zinc-950 focus:outline-none ${!isOnline ? 'cursor-not-allowed text-zinc-400' : ''}`}
                         placeholder="840"
                       />
                       <span className="text-xs font-bold text-zinc-700 ml-2">PPM</span>
@@ -687,11 +751,18 @@ export function PumpControlPanel({
                     <div className="inline-flex items-center bg-zinc-100 p-1 rounded-xl border border-zinc-200/80 self-start sm:self-auto shrink-0 shadow-inner">
                       <button
                         type="button"
+                        disabled={!isOnline}
                         onClick={() => {
+                          if (!isOnline) {
+                            onTriggerOfflineModal?.();
+                            return;
+                          }
                           setCooldownEnabled(false);
                           setIsDirty(true);
                         }}
-                        className={`flex items-center gap-1.5 py-1.5 px-3.5 text-xs font-mono font-bold rounded-lg transition-all duration-200 cursor-pointer ${
+                        className={`flex items-center gap-1.5 py-1.5 px-3.5 text-xs font-mono font-bold rounded-lg transition-all duration-200 ${
+                          !isOnline ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                        } ${
                           !cooldownEnabled
                             ? 'bg-zinc-900 text-white shadow-xs font-extrabold'
                             : 'text-zinc-600 hover:text-zinc-900 hover:bg-white/60'
@@ -702,11 +773,18 @@ export function PumpControlPanel({
 
                       <button
                         type="button"
+                        disabled={!isOnline}
                         onClick={() => {
+                          if (!isOnline) {
+                            onTriggerOfflineModal?.();
+                            return;
+                          }
                           setCooldownEnabled(true);
                           setIsDirty(true);
                         }}
-                        className={`flex items-center gap-1.5 py-1.5 px-3.5 text-xs font-mono font-bold rounded-lg transition-all duration-200 cursor-pointer ${
+                        className={`flex items-center gap-1.5 py-1.5 px-3.5 text-xs font-mono font-bold rounded-lg transition-all duration-200 ${
+                          !isOnline ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                        } ${
                           cooldownEnabled
                             ? 'bg-emerald-700 text-white shadow-xs font-extrabold'
                             : 'text-zinc-600 hover:text-zinc-900 hover:bg-white/60'
@@ -728,13 +806,17 @@ export function PumpControlPanel({
                           <input
                             type="number"
                             min="1"
+                            disabled={!isOnline}
                             value={cooldownMins}
+                            onClick={() => {
+                              if (!isOnline) onTriggerOfflineModal?.();
+                            }}
                             onChange={(e) => {
                               setCooldownMins(e.target.value);
                               setIsDirty(true);
                             }}
                             onKeyDown={handleKeyDown}
-                            className="w-full bg-transparent text-sm font-bold text-zinc-950 focus:outline-none"
+                            className={`w-full bg-transparent text-sm font-bold text-zinc-950 focus:outline-none ${!isOnline ? 'cursor-not-allowed text-zinc-400' : ''}`}
                             placeholder="60"
                           />
                           <span className="text-xs font-bold text-zinc-700 ml-2">MENIT</span>
@@ -753,13 +835,17 @@ export function PumpControlPanel({
                             type="number"
                             min="1"
                             max="10"
+                            disabled={!isOnline}
                             value={cooldownMaxCycles}
+                            onClick={() => {
+                              if (!isOnline) onTriggerOfflineModal?.();
+                            }}
                             onChange={(e) => {
                               setCooldownMaxCycles(e.target.value);
                               setIsDirty(true);
                             }}
                             onKeyDown={handleKeyDown}
-                            className="w-full bg-transparent text-sm font-bold text-zinc-950 focus:outline-none"
+                            className={`w-full bg-transparent text-sm font-bold text-zinc-950 focus:outline-none ${!isOnline ? 'cursor-not-allowed text-zinc-400' : ''}`}
                             placeholder="1"
                           />
                           <span className="text-xs font-bold text-zinc-700 ml-2">KALI</span>
