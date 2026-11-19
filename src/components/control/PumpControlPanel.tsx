@@ -530,39 +530,14 @@ export function PumpControlPanel({
 
             {isTargetOpen && (
               <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 space-y-4 animate-in fade-in duration-150">
-                {/* Header Actions */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-zinc-200/60 pb-3">
-                  <div>
-                    <span className="text-xs font-black text-zinc-950 uppercase block font-mono">
-                      KONFIGURASI BATAS &amp; JEDA NUTRISI
-                    </span>
-                    <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
-                      Pompa menyala saat PPM &lt; Min, dan mati saat &gt;= Max
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleSaveConfig}
-                    disabled={isSavingConfig || pendingMode !== null || pendingPumpState !== null}
-                    className={`flex items-center gap-1.5 self-start sm:self-auto rounded-lg px-3.5 py-1.5 text-xs font-bold font-mono transition-all duration-200 cursor-pointer shadow-xs ${
-                      isDirty
-                        ? 'bg-amber-600 border border-amber-700 text-white hover:bg-amber-700 ring-2 ring-amber-400/40'
-                        : 'bg-emerald-700 border border-emerald-800 text-white hover:bg-emerald-800'
-                    }`}
-                  >
-                    {isSavingConfig ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        MENYIMPAN...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-3.5 w-3.5" />
-                        {isDirty ? 'SIMPAN PERUBAHAN' : 'SIMPAN PENGATURAN'}
-                      </>
-                    )}
-                  </button>
+                {/* Header Info */}
+                <div className="border-b border-zinc-200/60 pb-2.5">
+                  <span className="text-xs font-black text-zinc-950 uppercase block font-mono">
+                    KONFIGURASI BATAS &amp; JEDA NUTRISI
+                  </span>
+                  <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
+                    Pompa menyala saat PPM &lt; Min, dan mati saat &gt;= Max
+                  </p>
                 </div>
 
                 {/* 1. Pengaturan Target Min & Max */}
