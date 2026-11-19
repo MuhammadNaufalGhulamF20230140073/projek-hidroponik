@@ -606,17 +606,17 @@ export function PumpControlPanel({
                   </div>
                 </div>
 
-                {/* 2. Pilihan Radio Button: Pakai Cooldown vs Tanpa Cooldown */}
-                <div className="pt-2 border-t border-zinc-200/60 space-y-2.5">
+                {/* 2. Pilihan Radio Button: Pakai Fitur Cooldown vs Tutup / Matikan Fitur */}
+                <div className="pt-2 border-t border-zinc-200/60 space-y-3 font-sans">
                   <span className="text-[10px] font-mono font-bold text-zinc-800 uppercase tracking-wider block">
                     PILIHAN SISTEM COOLDOWN (JEDA POMPA)
                   </span>
 
                   <div className="grid grid-cols-1 gap-2.5">
-                    {/* Radio Option A: Aktifkan Cooldown */}
-                    <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all duration-150 ${
+                    {/* Radio Option 1: Pakai Fitur Cooldown */}
+                    <label className={`flex items-start gap-3 p-3 sm:p-3.5 rounded-xl border cursor-pointer transition-all duration-150 ${
                       cooldownEnabled 
-                        ? 'bg-emerald-50/70 border-emerald-300 ring-1 ring-emerald-400/40 shadow-2xs' 
+                        ? 'bg-emerald-50/80 border-emerald-400 ring-2 ring-emerald-500/20 shadow-2xs' 
                         : 'bg-white border-zinc-200 hover:bg-zinc-50'
                     }`}>
                       <input
@@ -630,19 +630,19 @@ export function PumpControlPanel({
                         className="mt-0.5 h-4 w-4 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                       />
                       <div className="space-y-0.5 min-w-0">
-                        <span className="text-xs font-bold text-zinc-950 block">
-                          Gunakan Aturan Cooldown (Batas Frekuensi &amp; Jeda)
+                        <span className="text-xs sm:text-sm font-bold text-zinc-950 block">
+                          Pakai Fitur Cooldown (Batas Frekuensi &amp; Jeda)
                         </span>
                         <span className="text-[11px] text-zinc-600 font-medium block">
-                          Mencegah over-nutrisi dengan membatasi berapa kali pompa boleh aktif dalam periode waktu tertentu agar pupuk larut merata.
+                          Membatasi berapa kali pompa boleh aktif dalam periode menit tertentu agar pupuk larut merata.
                         </span>
                       </div>
                     </label>
 
-                    {/* Radio Option B: Tanpa Cooldown */}
-                    <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all duration-150 ${
+                    {/* Radio Option 2: Tutup / Matikan Fitur Cooldown */}
+                    <label className={`flex items-start gap-3 p-3 sm:p-3.5 rounded-xl border cursor-pointer transition-all duration-150 ${
                       !cooldownEnabled 
-                        ? 'bg-sky-50/70 border-sky-300 ring-1 ring-sky-400/40 shadow-2xs' 
+                        ? 'bg-sky-50/80 border-sky-400 ring-2 ring-sky-500/20 shadow-2xs' 
                         : 'bg-white border-zinc-200 hover:bg-zinc-50'
                     }`}>
                       <input
@@ -656,19 +656,19 @@ export function PumpControlPanel({
                         className="mt-0.5 h-4 w-4 text-sky-600 focus:ring-sky-500 cursor-pointer"
                       />
                       <div className="space-y-0.5 min-w-0">
-                        <span className="text-xs font-bold text-zinc-950 block">
-                          Tanpa Cooldown (Bebas Aturan / Selalu Siap)
+                        <span className="text-xs sm:text-sm font-bold text-zinc-950 block">
+                          Tutup / Matikan Fitur Cooldown (Bebas Aturan)
                         </span>
                         <span className="text-[11px] text-zinc-600 font-medium block">
-                          Pompa langsung menyala kapan saja begitu PPM &lt; Target Min tanpa batasan timer atau jeda waktu.
+                          Fitur jeda dimatikan. Pompa bebas menyala kapan saja begitu PPM &lt; Target Min tanpa batas timer.
                         </span>
                       </div>
                     </label>
                   </div>
 
-                  {/* Input Parameter Cooldown (Hanya Muncul jika Cooldown Aktif) */}
-                  {cooldownEnabled && (
-                    <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono animate-in fade-in duration-200">
+                  {/* KONDISI: Jika Dipakai -> Munculkan Settingan. Jika Ditutup -> Matikan & Sembunyikan Settingan */}
+                  {cooldownEnabled ? (
+                    <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono animate-in fade-in slide-in-from-top-2 duration-200">
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-zinc-800 uppercase block">
                           Durasi Periode Jeda
@@ -676,6 +676,7 @@ export function PumpControlPanel({
                         <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
                           <input
                             type="number"
+                            min="1"
                             value={cooldownMins}
                             onChange={(e) => {
                               setCooldownMins(e.target.value);
@@ -687,7 +688,7 @@ export function PumpControlPanel({
                           />
                           <span className="text-xs font-bold text-zinc-700 ml-2">MENIT</span>
                         </div>
-                        <span className="text-[10px] text-zinc-500 font-medium block">
+                        <span className="text-[10px] text-zinc-500 font-medium block font-sans">
                           Jendela waktu pemantauan jeda pompa
                         </span>
                       </div>
@@ -712,12 +713,46 @@ export function PumpControlPanel({
                           />
                           <span className="text-xs font-bold text-zinc-700 ml-2">KALI</span>
                         </div>
-                        <span className="text-[10px] text-zinc-500 font-medium block">
+                        <span className="text-[10px] text-zinc-500 font-medium block font-sans">
                           Maksimal pompa aktif dalam {cooldownMins} menit (misal: 1x, 2x, 3x)
                         </span>
                       </div>
                     </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-950 text-xs font-sans animate-in fade-in duration-150">
+                      <span className="font-bold">✓ Fitur Cooldown Ditutup (Dimatikan):</span> Pompa beroperasi bebas tanpa batas frekuensi dan tanpa waktu jeda setiap kali PPM &lt; {ppmMin} PPM.
+                    </div>
                   )}
+
+                  {/* Tombol Simpan Pengaturan di Bagian Bawah Form (Mudah dijangkau di HP) */}
+                  <div className="pt-3 border-t border-zinc-200/80 flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-zinc-500 font-medium font-sans">
+                      {isDirty ? '⚠️ Ada perubahan belum disimpan' : 'Semua pengaturan tersimpan'}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveConfig}
+                      disabled={isSavingConfig || pendingMode !== null || pendingPumpState !== null}
+                      className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold font-mono transition-all duration-200 cursor-pointer shadow-xs ${
+                        isDirty
+                          ? 'bg-amber-600 border border-amber-700 text-white hover:bg-amber-700 ring-2 ring-amber-400/40'
+                          : 'bg-emerald-700 border border-emerald-800 text-white hover:bg-emerald-800'
+                      }`}
+                    >
+                      {isSavingConfig ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          MENYIMPAN...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-3.5 w-3.5" />
+                          {isDirty ? 'SIMPAN PERUBAHAN' : 'SIMPAN PENGATURAN'}
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
