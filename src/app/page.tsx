@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { StatusBanner } from '@/components/dashboard/StatusBanner';
 import { PumpControlPanel } from '@/components/control/PumpControlPanel';
@@ -22,9 +22,74 @@ interface LogItem {
 
 const LOGO_SRC = '/Bagas%20Hidrponik.jpg';
 
+function normalizeLogs(rawData: unknown, fallbackLogs: LogItem[]): LogItem[] {
+  if (!Array.isArray(rawData) || rawData.length === 0) {
+    return fallbackLogs;
+  }
+
+  return rawData.map((row: Record<string, unknown>, idx: number) => {
+    const packetIdRaw = row.packet_id ?? row.id ?? rawData.length - idx;
+    const packet_id = String(packetIdRaw).startsWith('#')
+      ? String(packetIdRaw)
+      : `#${packetIdRaw}`;
+
+    const tsRaw = row.timestamp ?? row.created_at ?? '';
+    let timestamp = String(tsRaw || '-');
+    if (tsRaw) {
+      const parsed = new Date(String(tsRaw));
+      if (!Number.isNaN(parsed.getTime())) {
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+        const hh = String(parsed.getHours()).padStart(2, '0');
+        const mm = String(parsed.getMinutes()).padStart(2, '0');
+        const ss = String(parsed.getSeconds()).padStart(2, '0');
+        timestamp = `${parsed.getDate()} ${months[parsed.getMonth()]}, ${hh}:${mm}.${ss}`;
+      }
+    }
+
+    const adc_raw = Number(row.adc_raw ?? 0);
+    const voltageNum = Number(row.voltage ?? 0);
+    const voltage =
+      typeof row.voltage === 'string' && row.voltage.includes('V')
+        ? row.voltage
+        : `${voltageNum.toFixed(3)} V`;
+
+    const ppm_raw = Number(row.ppm_raw ?? 0);
+    const ppm_filtered = Number(row.ppm_filtered ?? row.ppm ?? ppm_raw);
+
+    const is_active =
+      typeof row.is_active === 'boolean'
+        ? row.is_active
+        : typeof row.pump_state === 'boolean'
+          ? row.pump_state
+          : String(row.relay ?? '').toUpperCase() === 'MENYALA' ||
+            String(row.relay ?? '').toUpperCase() === 'ON' ||
+            row.relay === true;
+
+    const relay =
+      typeof row.relay === 'string' && row.relay.trim() !== ''
+        ? row.relay.toUpperCase()
+        : is_active
+          ? 'MENYALA'
+          : 'MATI';
+
+    return {
+      packet_id,
+      timestamp,
+      adc_raw: Number.isFinite(adc_raw) ? adc_raw : 0,
+      voltage,
+      ppm_raw: Number.isFinite(ppm_raw) ? ppm_raw : 0,
+      ppm_filtered: Number.isFinite(ppm_filtered) ? ppm_filtered : 0,
+      relay,
+      is_active,
+    };
+  });
+}
+
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'control' | 'history'>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isInitializingDb, setIsInitializingDb] = useState(false);
+  const [dbInitMessage, setDbInitMessage] = useState<string | null>(null);
 
   const [telemetry, setTelemetry] = useState({
     ppmStabil: 630.5,
@@ -51,6 +116,79 @@ export default function DashboardPage() {
     { packet_id: '#3', timestamp: '18 Nov, 19:56.46', adc_raw: 1420, voltage: '1.144 V', ppm_raw: 615.2, ppm_filtered: 612.0, relay: 'MENYALA', is_active: true },
   ]);
 
+  const syncAllData = useCallback(async () => {
+    try {
+      const [controlRes, historyRes] = await Promise.all([
+        fetch('/api/control', { cache: 'no-store' }),
+        fetch('/api/history?limit=25', { cache: 'no-store' }),
+      ]);
+
+      const controlData = await controlRes.json();
+      const historyData = await historyRes.json();
+
+      let hasAnySuccess = false;
+
+      if (controlRes.ok && controlData.success && controlData.control) {
+        hasAnySuccess = true;
+        setControlState((prev) => ({ ...prev, ...controlData.control }));
+        setTelemetry((prev) => ({
+          ...prev,
+          actualPumpActive: Boolean(controlData.control.pump_state),
+        }));
+      }
+
+      if (historyRes.ok && historyData.success && Array.isArray(historyData.data)) {
+        hasAnySuccess = true;
+        setLogs((prevLogs) => {
+          const mapped = normalizeLogs(historyData.data, prevLogs);
+          if (mapped.length > 0) {
+            const latest = mapped[0];
+            const voltNum = parseFloat(latest.voltage);
+            setTelemetry((prev) => ({
+              ...prev,
+              ppmStabil: latest.ppm_filtered,
+              ppmRaw: latest.ppm_raw,
+              adcRaw: latest.adc_raw,
+              voltage: Number.isFinite(voltNum) ? voltNum : prev.voltage,
+              actualPumpActive: latest.is_active,
+            }));
+          }
+          return mapped;
+        });
+      }
+
+      setTelemetry((prev) => ({ ...prev, isOnline: hasAnySuccess }));
+    } catch {
+      setTelemetry((prev) => ({ ...prev, isOnline: false }));
+    }
+  }, []);
+
+  useEffect(() => {
+    syncAllData();
+    const interval = setInterval(syncAllData, 5000);
+    return () => clearInterval(interval);
+  }, [syncAllData]);
+
+  const handleInitDatabase = async () => {
+    setIsInitializingDb(true);
+    setDbInitMessage(null);
+    try {
+      const res = await fetch('/api/init-db', { cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDbInitMessage(data.message || 'Skema database berhasil diinisialisasi.');
+        setTelemetry((prev) => ({ ...prev, isOnline: true }));
+        await syncAllData();
+      } else {
+        setDbInitMessage(data.error || 'Gagal menginisialisasi database.');
+      }
+    } catch {
+      setDbInitMessage('Gagal menghubungi endpoint /api/init-db.');
+    } finally {
+      setIsInitializingDb(false);
+    }
+  };
+
   const handleUpdateControl = async (params: {
     mode?: 'auto' | 'manual';
     state?: boolean;
@@ -58,7 +196,7 @@ export default function DashboardPage() {
     target_ppm_max?: number;
     cooldown_minutes?: number;
   }) => {
-    const updatedState = {
+    const optimisticState = {
       ...controlState,
       ...(params.mode !== undefined && { pump_mode: params.mode }),
       ...(params.state !== undefined && { pump_state: params.state }),
@@ -67,7 +205,29 @@ export default function DashboardPage() {
       ...(params.cooldown_minutes !== undefined && { cooldown_minutes: params.cooldown_minutes }),
     };
 
-    setControlState(updatedState);
+    setControlState(optimisticState);
+
+    try {
+      const res = await fetch('/api/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success && data.control) {
+        setControlState((prev) => ({ ...prev, ...data.control }));
+        setTelemetry((prev) => ({
+          ...prev,
+          actualPumpActive: Boolean(data.control.pump_state),
+          isOnline: true,
+        }));
+      } else {
+        setTelemetry((prev) => ({ ...prev, isOnline: false }));
+      }
+    } catch {
+      setTelemetry((prev) => ({ ...prev, isOnline: false }));
+    }
 
     if (params.state !== undefined) {
       setTelemetry((prev) => ({ ...prev, actualPumpActive: params.state! }));
@@ -165,7 +325,7 @@ export default function DashboardPage() {
               {telemetry.isOnline ? 'POSTGRES LIVE' : 'OFFLINE'}
             </Badge>
             <button
-              onClick={() => window.location.reload()}
+              onClick={syncAllData}
               className="flex items-center gap-1.5 rounded-lg border border-zinc-400 bg-white px-2.5 sm:px-3.5 py-1.5 text-xs font-bold text-zinc-900 shadow-xs hover:bg-zinc-50 transition-all cursor-pointer"
             >
               <RefreshCw className="h-3.5 w-3.5" />
@@ -330,14 +490,23 @@ export default function DashboardPage() {
                       Vercel Postgres (Neon Serverless Pool)
                     </p>
                   </div>
-                  <button className="self-start sm:self-auto rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-bold text-zinc-100 hover:bg-zinc-700 transition cursor-pointer">
-                    INIT SCHEMA
+                  <button
+                    onClick={handleInitDatabase}
+                    disabled={isInitializingDb}
+                    className="self-start sm:self-auto rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-bold text-zinc-100 hover:bg-zinc-700 disabled:opacity-60 transition cursor-pointer"
+                  >
+                    {isInitializingDb ? 'INITIALIZING...' : 'INIT SCHEMA'}
                   </button>
                 </div>
                 <p className="text-xs text-zinc-300 border-t border-zinc-800/80 pt-3 font-semibold">
                   Schema Tables: <span className="text-emerald-400 font-bold">sensor_logs</span> &bull;{' '}
                   <span className="text-emerald-400 font-bold">system_control</span>.
                 </p>
+                {dbInitMessage && (
+                  <p className="text-xs text-emerald-300 mt-2 font-semibold">
+                    {dbInitMessage}
+                  </p>
+                )}
               </div>
 
               <div className="rounded-2xl border border-zinc-800 bg-[#121418] p-4 sm:p-6 text-zinc-100 shadow-lg">
