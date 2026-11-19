@@ -250,33 +250,34 @@ export function PumpControlPanel({
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 pt-1 font-mono">
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => handleTogglePumpState(true)}
-              className={`flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-black rounded-lg border transition cursor-pointer shadow-xs ${
-                isSwitchActive
-                  ? 'bg-emerald-600 border-emerald-700 text-white shadow-md ring-2 ring-emerald-500/40'
-                  : 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
-              }`}
-            >
-              <Power className="h-3.5 w-3.5" />
-              NYALAKAN (ON)
-            </button>
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => handleTogglePumpState(false)}
-              className={`flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-black rounded-lg border transition cursor-pointer shadow-xs ${
-                !isSwitchActive
-                  ? 'bg-rose-600 border-rose-700 text-white shadow-md ring-2 ring-rose-500/40'
-                  : 'bg-rose-50 border-rose-300 text-rose-800 hover:bg-rose-100'
-              }`}
-            >
-              <Power className="h-3.5 w-3.5" />
-              MATIKAN (OFF)
-            </button>
+          {/* 1 Tombol Toggle Tunggal (Cerdas & Anti-Bingung) */}
+          <div className="pt-1 font-mono">
+            {isSwitchActive ? (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handleTogglePumpState(false)}
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 text-xs sm:text-sm font-black rounded-lg border border-rose-700 bg-rose-600 hover:bg-rose-700 text-white shadow-sm ring-2 ring-rose-500/30 transition-all cursor-pointer active:scale-[0.99]"
+              >
+                <Power className="h-4 w-4" />
+                MATIKAN POMPA (OFF)
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handleTogglePumpState(true)}
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 text-xs sm:text-sm font-black rounded-lg border border-emerald-700 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/30 transition-all cursor-pointer active:scale-[0.99]"
+              >
+                <Power className="h-4 w-4" />
+                NYALAKAN POMPA (ON)
+              </button>
+            )}
+            <p className="text-[10px] font-semibold text-zinc-700 text-center mt-1.5">
+              {isSwitchActive 
+                ? '● Pompa sedang AKTIF — Klik tombol untuk mematikan' 
+                : '○ Pompa sedang MATI — Klik tombol untuk menyalakan'}
+            </p>
           </div>
         </div>
       </div>
