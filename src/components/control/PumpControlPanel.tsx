@@ -12,7 +12,8 @@ import {
   Loader2, 
   Sliders, 
   Settings2, 
-  ChevronDown
+  ChevronDown,
+  RotateCcw
 } from 'lucide-react';
 
 interface CooldownInfo {
@@ -569,14 +570,62 @@ export function PumpControlPanel({
 
             {isTargetOpen && (
               <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 space-y-4 animate-in fade-in duration-150">
-                {/* Header Info */}
-                <div className="border-b border-zinc-200/60 pb-2.5">
-                  <span className="text-xs font-black text-zinc-950 uppercase block font-mono">
-                    KONFIGURASI BATAS &amp; JEDA NUTRISI
-                  </span>
-                  <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
-                    Pompa menyala saat PPM &lt; Min, dan mati saat &gt;= Max
-                  </p>
+                {/* Header Info & Tombol Aksi Simpan / Batal di Bagian Atas */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 border-b border-zinc-200/80 pb-3">
+                  <div>
+                    <span className="text-xs font-black text-zinc-950 uppercase block font-mono">
+                      KONFIGURASI BATAS &amp; JEDA NUTRISI
+                    </span>
+                    <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
+                      {isDirty 
+                        ? '⚠️ Ada perubahan belum disimpan ke alat' 
+                        : 'Pompa menyala saat PPM < Min, dan mati saat >= Max'}
+                    </p>
+                  </div>
+
+                  {/* Tombol Simpan & Batal (Di atas konfigurasi agar tidak ribet scroll jauh) */}
+                  <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 font-mono text-xs">
+                    {/* Tombol Batal: hanya aktif jika isDirty */}
+                    <button
+                      type="button"
+                      onClick={handleDiscardChanges}
+                      disabled={!isDirty || isSavingConfig}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all duration-150 ${
+                        isDirty && !isSavingConfig
+                          ? 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 cursor-pointer shadow-2xs active:scale-95'
+                          : 'border-zinc-200 bg-zinc-100 text-zinc-400 cursor-not-allowed opacity-50'
+                      }`}
+                      title={isDirty ? 'Batalkan perubahan dan kembalikan nilai tersimpan' : 'Tidak ada perubahan'}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span>BATAL</span>
+                    </button>
+
+                    {/* Tombol Simpan: NGEBLOK jika tidak ada perubahan (!isDirty) untuk meminimalisir spam */}
+                    <button
+                      type="button"
+                      onClick={handleSaveConfig}
+                      disabled={!isDirty || isSavingConfig || pendingMode !== null || pendingPumpState !== null}
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 ${
+                        isDirty && !isSavingConfig
+                          ? 'bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs cursor-pointer active:scale-95 ring-2 ring-emerald-500/20 font-black'
+                          : 'bg-zinc-200 border border-zinc-200 text-zinc-400 cursor-not-allowed opacity-60'
+                      }`}
+                      title={isDirty ? 'Simpan perubahan ke alat ESP32' : 'Tidak ada perubahan untuk disimpan'}
+                    >
+                      {isSavingConfig ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <span>MENYIMPAN...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-3.5 w-3.5" />
+                          <span>SIMPAN</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 {/* 1. Pengaturan Target Min & Max */}
@@ -725,47 +774,6 @@ export function PumpControlPanel({
                       <span className="font-bold text-zinc-900">○ Katup Tertutup (Fitur Jeda Mati):</span> Pompa beroperasi bebas menyala kapan saja begitu PPM &lt; {ppmMin} PPM tanpa timer jeda.
                     </div>
                   )}
-
-                  {/* Tombol Simpan Pengaturan di Bagian Bawah Form (Mudah dijangkau di HP) */}
-                  <div className="pt-3 border-t border-zinc-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[11px] font-medium font-sans ${isDirty ? 'text-amber-800 font-bold' : 'text-zinc-500'}`}>
-                        {isDirty ? '⚠️ Ada perubahan belum disimpan ke alat' : '✓ Semua pengaturan tersimpan'}
-                      </span>
-                      {isDirty && (
-                        <button
-                          type="button"
-                          onClick={handleDiscardChanges}
-                          className="text-[10px] text-zinc-500 hover:text-rose-600 underline cursor-pointer font-sans"
-                        >
-                          Batalkan Editan
-                        </button>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleSaveConfig}
-                      disabled={isSavingConfig || pendingMode !== null || pendingPumpState !== null}
-                      className={`flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold font-mono transition-all duration-200 cursor-pointer shadow-xs ${
-                        isDirty
-                          ? 'bg-amber-600 border border-amber-700 text-white hover:bg-amber-700 ring-2 ring-amber-400/40 font-extrabold'
-                          : 'bg-emerald-700 border border-emerald-800 text-white hover:bg-emerald-800'
-                      }`}
-                    >
-                      {isSavingConfig ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          MENYIMPAN...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="h-3.5 w-3.5" />
-                          {isDirty ? 'SIMPAN PERUBAHAN' : 'SIMPAN PENGATURAN'}
-                        </>
-                      )}
-                    </button>
-                  </div>
                 </div>
               </div>
             )}

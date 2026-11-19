@@ -7,7 +7,7 @@ interface UnsavedChangesModalProps {
   isOpen: boolean;
   targetTabName: string;
   onSaveAndLeave: () => Promise<void> | void;
-  onDiscardAndLeave: () => void;
+  onDiscardAndLeave?: () => void;
   onCancel: () => void;
   isSaving?: boolean;
 }
@@ -16,7 +16,6 @@ export function UnsavedChangesModal({
   isOpen,
   targetTabName,
   onSaveAndLeave,
-  onDiscardAndLeave,
   onCancel,
   isSaving = false,
 }: UnsavedChangesModalProps) {
@@ -68,57 +67,47 @@ export function UnsavedChangesModal({
         {/* Isi Pesan Peringatan */}
         <div id="unsaved-alert-desc" className="space-y-2 text-xs sm:text-[13px] text-zinc-700 leading-relaxed bg-zinc-50 p-3.5 rounded-xl border border-zinc-200">
           <p>
-            Anda telah mengubah setelan pompa hidroponik (Target PPM / Katup Cooldown), namun <strong>belum mengklik tombol Simpan</strong>.
+            Anda telah mengubah pengaturan pompa (Target PPM / Katup Cooldown), namun <strong>belum mengklik tombol Simpan</strong>.
           </p>
           <p className="font-semibold text-zinc-900">
-            Jika berpindah ke menu <u>{targetTabName}</u> tanpa menyimpan, perubahan tidak akan diterapkan ke alat ESP32 dan pengaturan kembali ke nilai sebelumnya.
+            Pilih <strong>SIMPAN</strong> untuk menyimpan ke alat ESP32 dan melanjutkan pindah menu, atau <strong>BATAL</strong> untuk tetap di pengaturan.
           </p>
         </div>
 
-        {/* Tombol Opsi Aksi */}
-        <div className="space-y-2 pt-1 font-mono text-xs">
-          {/* Opsi 1: Simpan dan Pindah Menu */}
-          <button
-            type="button"
-            onClick={onSaveAndLeave}
-            disabled={isSaving}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-98 text-white font-black shadow-sm transition-all cursor-pointer disabled:opacity-70"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>MENYIMPAN KE ALAT...</span>
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                <span>SIMPAN PERUBAHAN &amp; PINDAH MENU</span>
-              </>
-            )}
-          </button>
-
-          {/* Opsi 2: Buang Perubahan dan Pindah Menu */}
-          <button
-            type="button"
-            onClick={onDiscardAndLeave}
-            disabled={isSaving}
-            className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-zinc-300 bg-white hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 active:scale-98 text-zinc-700 font-bold transition-all cursor-pointer"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            <span>BUANG PERUBAHAN &amp; PINDAH</span>
-          </button>
-
-          {/* Opsi 3: Batal / Tetap di Pengaturan */}
+        {/* Tombol Opsi Aksi: Simpan dan Batal */}
+        <div className="grid grid-cols-2 gap-2.5 pt-1 font-mono text-xs">
+          {/* Tombol Batal */}
           <button
             type="button"
             onClick={onCancel}
             disabled={isSaving}
-            className="w-full py-1.5 text-center text-zinc-500 hover:text-zinc-800 text-[11px] font-bold transition cursor-pointer"
+            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-100 active:scale-98 text-zinc-700 font-bold transition-all cursor-pointer disabled:opacity-50"
           >
-            Batal (Tetap di Menu Pengaturan Pompa)
+            <span>BATAL</span>
+          </button>
+
+          {/* Tombol Simpan */}
+          <button
+            type="button"
+            onClick={onSaveAndLeave}
+            disabled={isSaving}
+            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-98 text-white font-black shadow-xs transition-all cursor-pointer disabled:opacity-70"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>MENYIMPAN...</span>
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4" />
+                <span>SIMPAN</span>
+              </>
+            )}
           </button>
         </div>
       </div>
     </div>
   );
 }
+
