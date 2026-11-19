@@ -123,7 +123,7 @@ export default function DashboardPage() {
   });
 
   const [controlState, setControlState] = useState<SystemControl>({
-    id: '1',
+    id: 'default',
     pump_mode: 'auto',
     pump_state: false,
     target_ppm_min: 560,
@@ -174,22 +174,20 @@ export default function DashboardPage() {
 
         if (sensorData.data) {
           const d = sensorData.data as Record<string, unknown>;
-          const nextPpmStabil = Number(
-            d.ppm_stabil ?? d.ppmStabil ?? d.ppm_filtered ?? telemetry.ppmStabil
-          );
-          const nextPpmRaw = Number(d.ppm_raw ?? d.ppmRaw ?? telemetry.ppmRaw);
-          const nextVoltage = Number(d.tegangan ?? d.teganganRaw ?? d.voltage ?? telemetry.voltage);
-          const nextAdcRaw = Number(d.adc_raw ?? d.adcRaw ?? telemetry.adcRaw);
+          const parsedPpmStabil = Number(d.ppm_stabil ?? d.ppmStabil ?? d.ppm_filtered);
+          const parsedPpmRaw = Number(d.ppm_raw ?? d.ppmRaw);
+          const parsedVoltage = Number(d.tegangan ?? d.teganganRaw ?? d.voltage);
+          const parsedAdcRaw = Number(d.adc_raw ?? d.adcRaw);
           const nextPumpActive = Boolean(
             d.status_pompa ?? d.pompaAktif ?? d.pump_state ?? false
           );
 
           setTelemetry((prev) => ({
             ...prev,
-            ppmStabil: Number.isFinite(nextPpmStabil) ? nextPpmStabil : prev.ppmStabil,
-            ppmRaw: Number.isFinite(nextPpmRaw) ? nextPpmRaw : prev.ppmRaw,
-            voltage: Number.isFinite(nextVoltage) ? nextVoltage : prev.voltage,
-            adcRaw: Number.isFinite(nextAdcRaw) ? nextAdcRaw : prev.adcRaw,
+            ppmStabil: Number.isFinite(parsedPpmStabil) ? parsedPpmStabil : prev.ppmStabil,
+            ppmRaw: Number.isFinite(parsedPpmRaw) ? parsedPpmRaw : prev.ppmRaw,
+            voltage: Number.isFinite(parsedVoltage) ? parsedVoltage : prev.voltage,
+            adcRaw: Number.isFinite(parsedAdcRaw) ? parsedAdcRaw : prev.adcRaw,
             actualPumpActive: nextPumpActive,
             isOnline: deviceOnline,
             lastSeenSeconds: seenSeconds,
@@ -223,7 +221,7 @@ export default function DashboardPage() {
     } finally {
       if (showSpinner) setIsRefreshing(false);
     }
-  }, [telemetry.adcRaw, telemetry.ppmRaw, telemetry.ppmStabil, telemetry.voltage]);
+  }, []);
 
   useEffect(() => {
     syncAllData(false);
@@ -345,7 +343,7 @@ export default function DashboardPage() {
       )}
 
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto pb-20 md:pb-0">
-        {/* Header Atas Responsif dengan Indikator & Tombol Refresh */}
+        {/* Header Atas Responsif */}
         <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-zinc-300 bg-white px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4 shadow-xs">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <button
