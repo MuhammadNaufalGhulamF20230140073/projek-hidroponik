@@ -88,8 +88,12 @@ export function PumpControlPanel({
     if (control.pump_mode === newMode) return;
     setPendingMode(newMode);
     try {
-      await onUpdateControl({ mode: newMode });
+      // Sebelum beralih mode (terutama dari otomatis ke manual saat pompa ON):
+      // Selalu kirim sinyal MATI terlebih dahulu (state: false) ke server & ESP32 demi keamanan!
+      await onUpdateControl({ mode: newMode, state: false });
       showNotification(`MODE AKTIF: ${newMode === 'auto' ? 'OTOMATIS (SENSOR)' : 'MANUAL (SAKLAR)'}`);
+    } catch (err: any) {
+      alert(`Gagal beralih mode: ${err?.message || 'Terjadi kesalahan'}`);
     } finally {
       setPendingMode(null);
     }
@@ -259,10 +263,24 @@ export function PumpControlPanel({
       </div>
 
       {/* =========================================================================
-          KONDISI 1: JIKA MODE MANUAL -> HANYA TAMPILKAN SAKLAR POMPA
-          (Pengaturan otomatis disembunyikan agar minimalis & fokus)
+          TRANSISI AMAN KETIKA SEDANG BERPINDAH MODE
+          (Tampilan manual TIDAK akan di-load dulu sebelum sinyal OFF selesai terkirim)
          ========================================================================= */}
-      {isManual ? (
+      {pendingMode !== null ? (
+        <div className="py-8 px-4 rounded-xl border border-zinc-200 bg-zinc-50 flex flex-col items-center justify-center text-center space-y-2.5 animate-in fade-in duration-150 font-mono">
+          <Loader2 className="h-6 w-6 text-emerald-700 animate-spin" />
+          <span className="text-xs font-black text-zinc-950 uppercase tracking-wide">
+            {pendingMode === 'manual' 
+              ? 'Mematikan Pompa & Mengamankan Sistem...' 
+              : 'Mengalihkan Sistem ke Mode Otomatis...'}
+          </span>
+          <span className="text-[11px] text-zinc-500 font-sans font-medium max-w-xs">
+            {pendingMode === 'manual'
+              ? 'Memastikan sinyal pompa mati terkirim ke ESP32 sebelum memuat saklar manual'
+              : 'Menyiapkan pemantauan sensor nutrisi otomatis'}
+          </span>
+        </div>
+      ) : isManual ? (
         <div className="pt-1 space-y-3 animate-in fade-in duration-200">
           <div className="flex items-center justify-between font-mono text-xs bg-zinc-50 p-3 rounded-xl border border-zinc-200">
             <div className="flex items-center gap-2">

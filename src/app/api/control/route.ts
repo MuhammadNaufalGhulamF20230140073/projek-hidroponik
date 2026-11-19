@@ -25,7 +25,10 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const mode = body.mode !== undefined ? (body.mode === 'manual' ? 'manual' : 'auto') : undefined;
-    const state = body.state !== undefined ? Boolean(body.state) : undefined;
+    // Jika beralih mode dan state tidak ditentukan, pastikan pompa dimatikan terlebih dahulu demi keselamatan (state: false)
+    const state = body.state !== undefined 
+      ? Boolean(body.state) 
+      : (mode !== undefined ? false : undefined);
     const target_ppm_min = body.target_ppm_min !== undefined ? Number(body.target_ppm_min) : undefined;
     const target_ppm_max = body.target_ppm_max !== undefined ? Number(body.target_ppm_max) : undefined;
     const cooldown_minutes = body.cooldown_minutes !== undefined ? Number(body.cooldown_minutes) : undefined;

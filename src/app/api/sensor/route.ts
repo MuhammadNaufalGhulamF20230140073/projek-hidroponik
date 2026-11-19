@@ -90,6 +90,11 @@ export async function POST(req: Request) {
     const dosing_started = Boolean(body.dosingStarted ?? body.dosing_started ?? false);
     const dosing_completed = Boolean(body.dosingCompleted ?? body.dosing_completed ?? false);
 
+    // Ambil log sensor sebelumnya untuk deteksi perubahan status (edge detection)
+    const prevLog = await getLatestSensorLog();
+    const wasPumpOn = Boolean(prevLog?.status_pompa);
+    const isPumpNowOn = Boolean(status_pompa);
+
     // Simpan ke Vercel Postgres
     const savedLog = await insertSensorLog({
       adc_raw,
@@ -101,8 +106,8 @@ export async function POST(req: Request) {
 
     let control = await getSystemControl();
     const isCooldownEnabled = control.cooldown_enabled !== false;
-    const cooldownTotalSeconds = (control.cooldown_minutes || 60) * 60;
-    const maxCycles = control.cooldown_max_cycles || 1;
+    const cooldownTotalSeconds = Math.max(1, (control.cooldown_minutes || 60)) * 60;
+    const maxCycles = Math.max(1, control.cooldown_max_cycles || 1);
     const nowServerPost = Date.now();
 
     // Hitung apakah saat ini sedang dalam cooldown & batas siklus
@@ -110,46 +115,62 @@ export async function POST(req: Request) {
     let cooldown_remaining_seconds = 0;
 
     if (isCooldownEnabled) {
-      const windowStartMs = control.window_started_at
+      let windowStartMs = control.window_started_at
         ? new Date(control.window_started_at).getTime()
         : (control.last_dosing_at ? new Date(control.last_dosing_at).getTime() : 0);
-      const elapsed = windowStartMs > 0 ? Math.round((nowServerPost - windowStartMs) / 1000) : 999999;
-      const currentCycles = control.cycle_count || 0;
+      let elapsed = windowStartMs > 0 ? Math.max(0, Math.round((nowServerPost - windowStartMs) / 1000)) : 999999;
+      let currentCycles = control.cycle_count || 0;
 
-      if (windowStartMs > 0 && elapsed < cooldownTotalSeconds) {
-        if (currentCycles >= maxCycles) {
-          isCurrentlyInCooldown = true;
-          cooldown_remaining_seconds = cooldownTotalSeconds - elapsed;
+      // Reset jika durasi periode jendela waktu sudah selesai
+      if (windowStartMs > 0 && elapsed >= cooldownTotalSeconds) {
+        currentCycles = 0;
+        windowStartMs = 0;
+        elapsed = 999999;
+        control = await updatePumpControl({
+          cycle_count: 0,
+          window_started_at: null,
+        });
+      }
+
+      // Deteksi transisi Pompa:
+      const pumpJustStarted = (dosing_started || (!wasPumpOn && isPumpNowOn)) && control.pump_mode === 'auto';
+      // SIKLUS HANYA DIHITUNG KETIKA SELESAI (HIDUP -> MATI):
+      const pumpJustFinished = (dosing_completed || (wasPumpOn && !isPumpNowOn)) && control.pump_mode === 'auto';
+
+      // 1. Jika pompa baru saja mulai hidup di awal periode baru:
+      if (pumpJustStarted) {
+        if (windowStartMs === 0 || elapsed >= cooldownTotalSeconds) {
+          windowStartMs = nowServerPost;
+          elapsed = 0;
+          control = await updatePumpControl({
+            window_started_at: new Date().toISOString(),
+            last_dosing_at: new Date().toISOString(),
+          });
         }
       }
 
-      // RATE LIMITING / PENGATURAN FREKUENSI SIKLUS PER JENDELA WAKTU:
-      if ((dosing_started || (status_pompa && control.pump_mode === 'auto')) && !isCurrentlyInCooldown) {
-        if (windowStartMs === 0 || elapsed >= cooldownTotalSeconds) {
-          // Mulai jendela waktu baru
-          const newCycles = 1;
-          const willLock = newCycles >= maxCycles;
-          control = await updatePumpControl({
-            window_started_at: new Date().toISOString(),
-            cycle_count: newCycles,
-            last_dosing_at: new Date().toISOString(),
-          });
-          if (willLock) {
-            isCurrentlyInCooldown = true;
-            cooldown_remaining_seconds = cooldownTotalSeconds;
-          }
-        } else if (currentCycles < maxCycles) {
-          // Tambah siklus dalam jendela waktu yang aktif
-          const newCycles = currentCycles + 1;
-          const willLock = newCycles >= maxCycles;
-          control = await updatePumpControl({
-            cycle_count: newCycles,
-            last_dosing_at: new Date().toISOString(),
-          });
-          if (willLock) {
-            isCurrentlyInCooldown = true;
-            cooldown_remaining_seconds = cooldownTotalSeconds - elapsed;
-          }
+      // 2. Jika pompa baru saja selesai mati setelah menyala (HIDUP -> MATI = 1x SIKLUS):
+      if (pumpJustFinished) {
+        const newCycles = currentCycles + 1;
+        currentCycles = newCycles;
+        const willLock = newCycles >= maxCycles;
+
+        control = await updatePumpControl({
+          cycle_count: newCycles,
+          last_dosing_at: new Date().toISOString(),
+          ...(windowStartMs === 0 ? { window_started_at: new Date().toISOString() } : {}),
+        });
+
+        if (willLock) {
+          isCurrentlyInCooldown = true;
+          cooldown_remaining_seconds = Math.max(0, cooldownTotalSeconds - elapsed);
+        }
+      } else if (currentCycles >= maxCycles && windowStartMs > 0 && elapsed < cooldownTotalSeconds) {
+        // Jika jatah sudah habis dan belum waktunya reset:
+        // Catatan: Jika pompa saat ini masih aktif memompa, jangan kunci paksa agar dapat menyelesaikan targetnya
+        if (!isPumpNowOn) {
+          isCurrentlyInCooldown = true;
+          cooldown_remaining_seconds = Math.max(0, cooldownTotalSeconds - elapsed);
         }
       }
     }

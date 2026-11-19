@@ -361,6 +361,25 @@ export default function DashboardPage() {
             current_cycles: Number(data.control.cycle_count ?? prev.current_cycles ?? 0),
           }));
         }
+
+        if (params.state !== undefined) {
+          const now = new Date();
+          const timeString = formatShortTimestamp(now.toISOString());
+
+          const newLogItem: LogItem = {
+            packet_id: `#${logs.length + 1}`,
+            timestamp: timeString,
+            adc_raw: telemetry.adcRaw,
+            voltage: `${telemetry.voltage.toFixed(3)} V`,
+            ppm_raw: telemetry.ppmRaw,
+            ppm_filtered: telemetry.ppmStabil,
+            relay: Boolean(params.state) ? 'MENYALA' : 'MATI',
+            is_active: Boolean(params.state),
+          };
+
+          setLogs((prevLogs) => [newLogItem, ...prevLogs]);
+        }
+
         return data.control;
       } else {
         throw new Error(data.error || 'Gagal memperbarui konfigurasi');
@@ -368,26 +387,6 @@ export default function DashboardPage() {
     } catch (err) {
       console.error('handleUpdateControl error:', err);
       throw err;
-    }
-
-    if (params.state !== undefined) {
-      setTelemetry((prev) => ({ ...prev, actualPumpActive: params.state! }));
-
-      const now = new Date();
-      const timeString = formatShortTimestamp(now.toISOString());
-
-      const newLogItem: LogItem = {
-        packet_id: `#${logs.length + 1}`,
-        timestamp: timeString,
-        adc_raw: telemetry.adcRaw,
-        voltage: `${telemetry.voltage.toFixed(3)} V`,
-        ppm_raw: telemetry.ppmRaw,
-        ppm_filtered: telemetry.ppmStabil,
-        relay: Boolean(params.state) ? 'MENYALA' : 'MATI',
-        is_active: Boolean(params.state),
-      };
-
-      setLogs((prevLogs) => [newLogItem, ...prevLogs]);
     }
   };
 
