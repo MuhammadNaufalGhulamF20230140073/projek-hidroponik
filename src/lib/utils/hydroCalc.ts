@@ -33,10 +33,10 @@ export function getSolutionStatus(ppm: number, min = 560, max = 840): {
   if (ppm > max) {
     return {
       status: 'tinggi',
-      label: 'Nutrisi Terlalu Pekat',
-      color: 'text-rose-500',
-      badgeBg: 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400',
-      description: 'PPM melebihi batas optimal. Tambahkan air baku/bersih untuk mengencerkan larutan.',
+      label: 'Nutrisi Mencukupi / Di Atas Target',
+      color: 'text-amber-600 dark:text-amber-400',
+      badgeBg: 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400',
+      description: 'PPM telah mencapai batas target. Pompa dinonaktifkan otomatis agar tidak over pemberian nutrisi pada tanaman.',
     };
   }
 

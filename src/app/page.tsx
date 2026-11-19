@@ -697,6 +697,9 @@ export default function DashboardPage() {
                   ppm={telemetry.ppmStabil}
                   targetMin={controlState.target_ppm_min}
                   targetMax={controlState.target_ppm_max}
+                  isCooldown={cooldown.is_in_cooldown}
+                  cooldownRemaining={cooldown.remaining_seconds}
+                  cooldownEnabled={cooldown.enabled !== false}
                 />
               </div>
 
