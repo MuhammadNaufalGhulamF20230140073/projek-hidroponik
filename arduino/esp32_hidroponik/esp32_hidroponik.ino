@@ -6,10 +6,13 @@
  1. Mode OTOMATIS (AUTO):
     - Jika PPM < Batas Min (default 560 PPM), pompa MENYALA.
     - Pompa TERUS MENYALA sampai nutrisi larut mencapai Batas Max (default 840 PPM).
-    - Begitu target tercapai, pompa MATI dan masuk masa COOLDOWN 1 JAM (60 Menit).
-    - Selama masa 1 jam, pompa DIKUNCI (maksimal 1x siklus per jam) agar tidak over-nutrisi!
+    - Begitu target tercapai, pompa MATI dan masa COOLDOWN (misal 60 Menit)
+      dihitung SEJAK SIKLUS MULAI (Rate Limiter).
+    - Selama masa cooldown, pompa DIKUNCI MATI (maksimal 1x siklus per durasi)
+      agar tidak over-nutrisi!
+    - Cooldown TIDAK AKAN di-reset saat pompa mati, hidup, atau saat user mengubah angka!
  2. Mode MANUAL:
-    - Saklar pompa 100% mengikuti tombol ON / OFF di Web Dashboard.
+    - Saklar pompa 100% mengikuti tombol ON / OFF di Web Dashboard secara realtime.
     - Relay Pin 23: HIGH = MENYALA (ON), LOW = MATI (OFF).
  ==============================================================================
 */
@@ -54,25 +57,28 @@ bool filterReady  = false;
 // ============================================================================
 // 5. PENGATURAN MODE, AMBANG BATAS & COOLDOWN (SYNC DARI WEB)
 // ============================================================================
-String modeOperasi      = "auto"; // "auto" (threshold + cooldown) atau "manual" (web)
-float targetPpmMin      = 560.0;  // Pompa mulai ON saat PPM < targetPpmMin
-float targetPpmMax      = 840.0;  // Pompa selesai & OFF saat PPM >= targetPpmMax
-int cooldownMinutes     = 60;     // Maksimal 1 kali siklus per 60 menit (1 Jam)
+String modeOperasi          = "auto"; // "auto" (threshold + cooldown) atau "manual" (web)
+float targetPpmMin          = 560.0;  // Pompa mulai ON saat PPM < targetPpmMin
+float targetPpmMax          = 840.0;  // Pompa selesai & OFF saat PPM >= targetPpmMax
+int cooldownMinutes         = 60;     // Maksimal 1 kali siklus per 60 menit (1 Jam)
 
-bool pompaAktif          = false;
-bool sedangDosing        = false; // Sedang dalam siklus pemompaan sampai target
-unsigned long waktuSelesaiDosing = 0; // Timestamp millis saat siklus dosing selesai
-bool laporanDosingSelesai = false;
+bool pompaAktif             = false;
+bool sedangDosing            = false; // Sedang dalam siklus memompa nutrisi hingga target tercapai
+unsigned long waktuMulaiSiklus = 0;   // Timestamp millis saat siklus pemompaan DIMULAI (Rate Limiter)
+bool serverInCooldown       = false; // Status cooldown dari server Vercel
+int serverCooldownRemaining = 0;     // Sisa detik cooldown dari server Vercel
 
-unsigned long waktuKirim = 0;
+bool laporanMulaiDosing     = false; // Flag lapor ke Vercel: siklus baru saja mulai
+bool laporanDosingSelesai    = false; // Flag lapor ke Vercel: target tercapai, pompa mati
+
+unsigned long waktuKirim    = 0;
 const unsigned long INTERVAL_KIRIM_AUTO   = 4000; // Kirim data setiap 4 detik saat AUTO
 const unsigned long INTERVAL_KIRIM_MANUAL = 2000; // Kirim data setiap 2 detik saat MANUAL agar sat-set!
 
 // ============================================================================
 // 6. PENGATURAN POLARITAS RELAY
 // ============================================================================
-// DIKONFIRMASI dari hardware: relay cetek saat boot (setup LOW) = Active LOW module
-// Active LOW: relay MENYALA saat pin LOW, MATI saat pin HIGH
+// Active HIGH: relay MENYALA saat pin HIGH, MATI saat pin LOW
 const bool RELAY_ACTIVE_HIGH = true;
 
 void kontrolPompa(bool status) {
@@ -129,10 +135,12 @@ void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmSta
   jsonPayload += "\"ppmRaw\":" + String(ppmRaw, 1) + ",";
   jsonPayload += "\"ppmStabil\":" + String(ppmStabil, 1) + ",";
   jsonPayload += "\"pompaAktif\":" + String(statusPompa ? "true" : "false") + ",";
+  jsonPayload += "\"dosingStarted\":" + String(laporanMulaiDosing ? "true" : "false") + ",";
   jsonPayload += "\"dosingCompleted\":" + String(laporanDosingSelesai ? "true" : "false");
   jsonPayload += "}";
 
-  if (laporanDosingSelesai) laporanDosingSelesai = false; // Reset flag setelah terkirim
+  if (laporanMulaiDosing) laporanMulaiDosing = false;
+  if (laporanDosingSelesai) laporanDosingSelesai = false;
 
   Serial.println("[HTTP] Mengirim telemetri ke Vercel...");
   int httpCode = http.POST(jsonPayload);
@@ -153,8 +161,10 @@ void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmSta
         Serial.println("[MODE] Mode berganti ke AUTO");
         modeOperasi = "auto";
         sedangDosing = false;
-        waktuSelesaiDosing = 0; // Reset cooldown agar langsung responsif
-        kontrolPompa(false);
+        // Jika server masih dalam status cooldown, pastikan pompa mati
+        if (serverInCooldown) {
+          kontrolPompa(false);
+        }
       }
     }
 
@@ -168,8 +178,8 @@ void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmSta
         float val = response.substring(startIdx, endIdx).toFloat();
         if (val > 0) {
           if (val != targetPpmMin) {
-            Serial.printf("[CONFIG] Ambang Target Berubah: %.0f -> %.0f PPM\n", targetPpmMin, val);
-            waktuSelesaiDosing = 0; // Reset jeda jika user sengaja mengubah ambang batas
+            Serial.printf("[CONFIG] Ambang Batas Min Berubah: %.0f -> %.0f PPM\n", targetPpmMin, val);
+            // Cooldown TIDAK direset agar siklus tetap aman!
           }
           targetPpmMin = val;
         }
@@ -183,7 +193,12 @@ void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmSta
       if (endIdx == -1) endIdx = response.indexOf("}", startIdx);
       if (endIdx != -1) {
         float val = response.substring(startIdx, endIdx).toFloat();
-        if (val > 0) targetPpmMax = val;
+        if (val > 0) {
+          if (val != targetPpmMax) {
+            Serial.printf("[CONFIG] Ambang Batas Max Berubah: %.0f -> %.0f PPM\n", targetPpmMax, val);
+          }
+          targetPpmMax = val;
+        }
       }
     }
 
@@ -199,7 +214,36 @@ void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmSta
       }
     }
 
-    // 4. Jika mode MANUAL: Eksekusi tombol Saklar Web langsung & cetek seketika!
+    // 4. Parsing Status Cooldown & Sisa Detik dari Server (Rate Limiter Sync)
+    if (response.indexOf("\"in_cooldown\":true") != -1) {
+      serverInCooldown = true;
+    } else if (response.indexOf("\"in_cooldown\":false") != -1) {
+      serverInCooldown = false;
+    }
+
+    int idxRem = response.indexOf("\"cooldown_remaining_seconds\":");
+    if (idxRem != -1) {
+      int startIdx = idxRem + 29;
+      int endIdx = response.indexOf(",", startIdx);
+      if (endIdx == -1) endIdx = response.indexOf("}", startIdx);
+      if (endIdx != -1) {
+        serverCooldownRemaining = response.substring(startIdx, endIdx).toInt();
+        // Sinkronisasi timer lokal dengan sisa waktu di server
+        if (serverInCooldown && serverCooldownRemaining > 0) {
+          unsigned long cdTotalMs = (unsigned long)cooldownMinutes * 60UL * 1000UL;
+          unsigned long sisaMs = (unsigned long)serverCooldownRemaining * 1000UL;
+          if (cdTotalMs >= sisaMs) {
+            waktuMulaiSiklus = millis() - (cdTotalMs - sisaMs);
+          }
+        } else if (!serverInCooldown) {
+          if (!sedangDosing) {
+            waktuMulaiSiklus = 0;
+          }
+        }
+      }
+    }
+
+    // 5. Jika mode MANUAL: Eksekusi tombol Saklar Web langsung & cetek seketika!
     if (modeOperasi == "manual") {
       bool serverPumpState = (response.indexOf("\"state\":true") != -1);
       if (pompaAktif != serverPumpState) {
@@ -272,7 +316,7 @@ void loop() {
   long totalADC = 0;
   for (int i = 0; i < JUMLAH_SAMPLE; i++) {
     totalADC += analogRead(TDS_PIN);
-    delay(10); // 10ms per sampel (total hanya 100ms, bukan 500ms!)
+    delay(10); // 10ms per sampel (total hanya 100ms)
   }
   float adcAverage = totalADC / (float)JUMLAH_SAMPLE;
 
@@ -291,30 +335,70 @@ void loop() {
   }
 
   // 7. KONTROL POMPA NUTRISI OTOMATIS:
+  //    Rate Limiter: Maksimal 1 siklus pemompaan per periode cooldown (misal 60 menit)
+  float batasTargetMax = (targetPpmMax > targetPpmMin) ? targetPpmMax : targetPpmMin;
+
   if (modeOperasi == "auto") {
     unsigned long cooldownMs = (unsigned long)cooldownMinutes * 60UL * 1000UL;
     unsigned long sekarangMs = millis();
-    bool masihCooldown = (waktuSelesaiDosing > 0) && (sekarangMs - waktuSelesaiDosing < cooldownMs);
 
-    // KONDISI A: PPM di bawah target ambang batas -> Pompa MENYALA (ON)
-    if (ppmFiltered < targetPpmMin) {
-      if (!masihCooldown) {
-        if (!pompaAktif) {
-          Serial.printf("[AUTO] PPM (%.1f) < Target (%.1f) -> Nyalakan Pompa (ON)!\n", ppmFiltered, targetPpmMin);
-          kontrolPompa(true);
-        }
+    // Evaluasi apakah sistem sedang dalam masa cooldown
+    bool masihCooldown = serverInCooldown;
+    if (waktuMulaiSiklus > 0) {
+      if (sekarangMs - waktuMulaiSiklus < cooldownMs) {
+        masihCooldown = true;
       } else {
-        // Jika sedang cooldown, pastikan pompa tetap mati demi keselamatan tanaman
-        if (pompaAktif) kontrolPompa(false);
+        if (!serverInCooldown) {
+          waktuMulaiSiklus = 0;
+          masihCooldown = false;
+        }
       }
     }
-    // KONDISI B: PPM sudah mencapai atau melebihi target (nutrisi cukup / config diturunkan) -> Pompa MATI (OFF)
-    else {
-      if (pompaAktif) {
-        Serial.printf("[AUTO] PPM (%.1f) >= Target (%.1f) -> Target Terpenuhi / Config Berubah! Matikan Pompa (OFF) & Mulai Jeda!\n", ppmFiltered, targetPpmMin);
+
+    if (sedangDosing) {
+      // SEDANG DALAM SIKLUS PEMOMPAAN:
+      // Pompa terus jalan hingga larutan nutrisi merata mencapai batas max
+      const unsigned long BATAS_MAX_DOSING_MS = 5UL * 60UL * 1000UL; // Safety timeout 5 menit
+
+      if (ppmFiltered >= batasTargetMax) {
+        Serial.printf("[AUTO] TARGET TERCAPAI! PPM (%.1f) >= Batas Max (%.1f) -> Matikan Pompa (OFF)!\n", ppmFiltered, batasTargetMax);
         kontrolPompa(false);
-        waktuSelesaiDosing = millis();
-        laporanDosingSelesai = true; // Laporkan selesai dosing ke Vercel
+        sedangDosing = false;
+        laporanDosingSelesai = true;
+        // waktuMulaiSiklus TIDAK DIRESET! Cooldown tetap terhitung dari awal siklus mulai.
+      } else if (sekarangMs - waktuMulaiSiklus > BATAS_MAX_DOSING_MS) {
+        Serial.println("[SAFETY] Waktu dosing maksimum (5 menit) tercapai! Mematikan pompa untuk keamanan.");
+        kontrolPompa(false);
+        sedangDosing = false;
+        laporanDosingSelesai = true;
+      } else {
+        if (!pompaAktif) {
+          kontrolPompa(true);
+        }
+      }
+    } else {
+      // TIDAK SEDANG DOSING:
+      if (masihCooldown) {
+        // SEDANG COOLDOWN: Pompa dikunci MATI (maks 1x siklus per durasi cooldown)
+        if (pompaAktif) {
+          Serial.println("[AUTO] Cooldown Aktif! Mengunci pompa MATI (OFF) agar tidak over-nutrisi.");
+          kontrolPompa(false);
+        }
+      } else {
+        // COOLDOWN SELESAI / SIAP SIKLUS:
+        if (ppmFiltered < targetPpmMin) {
+          // PPM di bawah ambang minimum -> Nyalakan pompa dan mulai siklus baru!
+          Serial.printf("[AUTO] PPM (%.1f) < Batas Min (%.1f) -> MULAI SIKLUS DOSING (ON)!\n", ppmFiltered, targetPpmMin);
+          waktuMulaiSiklus = millis(); // Kunci awal siklus (Rate limiting aktif sejak detik ini!)
+          sedangDosing = true;
+          laporanMulaiDosing = true;
+          kontrolPompa(true);
+        } else {
+          // PPM sudah aman di atas minimum -> Pompa tetap mati (standby)
+          if (pompaAktif) {
+            kontrolPompa(false);
+          }
+        }
       }
     }
   }
@@ -338,17 +422,22 @@ void loop() {
   if (modeOperasi == "auto") {
     unsigned long cooldownMs = (unsigned long)cooldownMinutes * 60UL * 1000UL;
     unsigned long sekarangMs = millis();
-    bool masihCooldown = (waktuSelesaiDosing > 0) && (sekarangMs - waktuSelesaiDosing < cooldownMs);
+    bool masihCooldown = serverInCooldown || ((waktuMulaiSiklus > 0) && (sekarangMs - waktuMulaiSiklus < cooldownMs));
 
-    if (pompaAktif) {
-      Serial.printf(" [Mengisi Nutrisi -> Target: %.0f PPM]", targetPpmMin);
+    if (sedangDosing) {
+      Serial.printf(" [Dosing Aktif -> Target: %.0f PPM]", batasTargetMax);
     } else if (masihCooldown) {
-      unsigned long sisaDetik = (cooldownMs - (sekarangMs - waktuSelesaiDosing)) / 1000UL;
+      unsigned long sisaDetik = 0;
+      if (waktuMulaiSiklus > 0 && sekarangMs - waktuMulaiSiklus < cooldownMs) {
+        sisaDetik = (cooldownMs - (sekarangMs - waktuMulaiSiklus)) / 1000UL;
+      } else if (serverCooldownRemaining > 0) {
+        sisaDetik = serverCooldownRemaining;
+      }
       unsigned long sisaMnt = sisaDetik / 60UL;
       unsigned long sisaDtk = sisaDetik % 60UL;
-      Serial.printf(" [Cooldown: %lum %02lus]", sisaMnt, sisaDtk);
+      Serial.printf(" [Cooldown: %lum %02lus (Maks 1x/periode)]", sisaMnt, sisaDtk);
     } else {
-      Serial.printf(" [Siap Pompa jika < %.0f PPM]", targetPpmMin);
+      Serial.printf(" [Siap Siklus Baru jika < %.0f PPM]", targetPpmMin);
     }
   }
   Serial.println();

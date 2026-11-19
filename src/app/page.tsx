@@ -428,7 +428,7 @@ export default function DashboardPage() {
               </span>
               {cooldown.is_in_cooldown && (
                 <span className="text-amber-800">
-                  COOLDOWN: {cooldown.remaining_minutes}m ({cooldown.remaining_seconds}s)
+                  COOLDOWN: {Math.floor(cooldown.remaining_seconds / 60)}m {(cooldown.remaining_seconds % 60).toString().padStart(2, '0')}s
                 </span>
               )}
             </div>

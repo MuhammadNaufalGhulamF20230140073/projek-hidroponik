@@ -67,6 +67,7 @@ export async function POST(req: Request) {
     const ppm_raw = Number(body.ppmRaw ?? body.ppm_raw ?? 0);
     const ppm_stabil = Number(body.ppmStabil ?? body.ppmFiltered ?? body.ppm_stabil ?? 0);
     const status_pompa = Boolean(body.pompaAktif ?? body.status_pompa ?? false);
+    const dosing_started = Boolean(body.dosingStarted ?? body.dosing_started ?? false);
     const dosing_completed = Boolean(body.dosingCompleted ?? body.dosing_completed ?? false);
 
     // Simpan ke Vercel Postgres
@@ -78,15 +79,38 @@ export async function POST(req: Request) {
       status_pompa,
     });
 
-    // Jika ESP32 melaporkan baru saja selesai dosing (pompa mati setelah target tercapai)
-    if (dosing_completed) {
-      await updatePumpControl({
-        last_dosing_at: new Date().toISOString(),
-      });
+    let control = await getSystemControl();
+    const cooldownTotalSeconds = (control.cooldown_minutes || 60) * 60;
+    const nowServerPost = Date.now();
+
+    // Hitung apakah saat ini sedang dalam cooldown
+    let isCurrentlyInCooldown = false;
+    let cooldown_remaining_seconds = 0;
+    if (control.last_dosing_at) {
+      const lastDosingMs = new Date(control.last_dosing_at).getTime();
+      const elapsed = Math.round((nowServerPost - lastDosingMs) / 1000);
+      if (elapsed < cooldownTotalSeconds) {
+        isCurrentlyInCooldown = true;
+        cooldown_remaining_seconds = cooldownTotalSeconds - elapsed;
+      }
     }
 
-    // Ambil status kontrol saat ini untuk dikirim balik ke ESP32
-    const control = await getSystemControl();
+    // RATE LIMITING / MAX 1 KALI PER PERIODE:
+    // Kunci timestamp siklus sejak pompa MULAI aktif memompa (jika belum dalam cooldown)
+    if ((dosing_started || (status_pompa && control.pump_mode === 'auto')) && !isCurrentlyInCooldown) {
+      control = await updatePumpControl({
+        last_dosing_at: new Date().toISOString(),
+      });
+      isCurrentlyInCooldown = true;
+      cooldown_remaining_seconds = cooldownTotalSeconds;
+    } else if (dosing_completed && !isCurrentlyInCooldown) {
+      // Fallback jika laporan start terlewat
+      control = await updatePumpControl({
+        last_dosing_at: new Date().toISOString(),
+      });
+      isCurrentlyInCooldown = true;
+      cooldown_remaining_seconds = cooldownTotalSeconds;
+    }
 
     return NextResponse.json({
       success: true,
@@ -99,6 +123,8 @@ export async function POST(req: Request) {
         target_ppm_min: Number(control.target_ppm_min ?? 560),
         target_ppm_max: Number(control.target_ppm_max ?? 840),
         cooldown_minutes: Number(control.cooldown_minutes ?? 60),
+        in_cooldown: isCurrentlyInCooldown,
+        cooldown_remaining_seconds: cooldown_remaining_seconds,
       },
     });
   } catch (error: any) {
