@@ -168,7 +168,7 @@ export async function getLatestSensorLog(): Promise<SensorLog | null> {
  */
 export async function getSensorLogs(limit = 30): Promise<SensorLog[]> {
   if (!isDbConfigured()) {
-    return mockDB.logs.slice(-limit);
+    return mockDB.logs.slice(-limit).reverse();
   }
 
   try {
@@ -179,7 +179,7 @@ export async function getSensorLogs(limit = 30): Promise<SensorLog[]> {
        LIMIT $1`,
       [limit]
     );
-    return rows.reverse();
+    return rows; // Mengembalikan urutan terbaru ke yang lama (Newest First)
   } catch (error) {
     console.warn('Gagal membaca history log:', error);
     return [];

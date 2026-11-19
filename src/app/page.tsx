@@ -44,7 +44,7 @@ function normalizeLogs(rawData: unknown, fallbackLogs: LogItem[]): LogItem[] {
     return fallbackLogs;
   }
 
-  return rawData.map((row: Record<string, unknown>, idx: number) => {
+  const mapped = rawData.map((row: Record<string, unknown>, idx: number) => {
     const packetIdRaw = row.packet_id ?? row.id ?? rawData.length - idx;
     const packet_id = String(packetIdRaw).startsWith('#')
       ? String(packetIdRaw)
@@ -85,6 +85,11 @@ function normalizeLogs(rawData: unknown, fallbackLogs: LogItem[]): LogItem[] {
           ? 'MENYALA'
           : 'MATI';
 
+    const sortTime = row.created_at || row.timestamp
+      ? new Date(String(row.created_at || row.timestamp)).getTime()
+      : 0;
+    const sortId = Number(row.id ?? 0);
+
     return {
       packet_id,
       timestamp,
@@ -94,7 +99,17 @@ function normalizeLogs(rawData: unknown, fallbackLogs: LogItem[]): LogItem[] {
       ppm_filtered: Number.isFinite(ppm_filtered) ? ppm_filtered : 0,
       relay,
       is_active,
+      _sortTime: Number.isNaN(sortTime) ? 0 : sortTime,
+      _sortId: Number.isNaN(sortId) ? 0 : sortId,
     };
+  });
+
+  // Urutkan selalu dari data terbaru ke data yang lama (Newest First)
+  return mapped.sort((a, b) => {
+    if (b._sortTime !== a._sortTime) {
+      return b._sortTime - a._sortTime;
+    }
+    return b._sortId - a._sortId;
   });
 }
 
