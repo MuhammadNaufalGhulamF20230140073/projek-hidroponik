@@ -19,20 +19,20 @@ export function Card({
 }: CardProps) {
   return (
     <div
-      className={`rounded-xl border border-zinc-200/90 bg-white p-4.5 shadow-[0_1px_3px_rgba(0,0,0,0.05)] transition-all dark:border-zinc-800 dark:bg-zinc-900/80 dark:backdrop-blur-sm ${className}`}
+      className={`rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-[0_4px_20px_rgba(0,0,0,0.03)] transition-all hover:shadow-[0_6px_24px_rgba(0,0,0,0.06)] ${className}`}
     >
       {(title || action || subtitle) && (
         <div
-          className={`mb-4 flex items-start justify-between border-b border-zinc-100 pb-3 dark:border-zinc-800/70 ${headerClassName}`}
+          className={`mb-4 flex items-start justify-between border-b border-zinc-100 pb-3.5 ${headerClassName}`}
         >
           <div>
             {title && (
-              <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              <div className="text-xs font-bold uppercase tracking-wider text-zinc-600">
                 {title}
               </div>
             )}
             {subtitle && (
-              <div className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
+              <div className="mt-0.5 text-xs text-zinc-400">
                 {subtitle}
               </div>
             )}

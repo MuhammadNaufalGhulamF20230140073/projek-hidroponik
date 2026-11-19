@@ -1,139 +1,56 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
-import { TDSMetricCard } from '@/components/dashboard/TDSMetricCard';
-import { VoltageCard } from '@/components/dashboard/VoltageCard';
+import React, { useState } from 'react';
+import { Sidebar } from '@/components/Sidebar';
 import { StatusBanner } from '@/components/dashboard/StatusBanner';
-import { SensorChart } from '@/components/dashboard/SensorChart';
 import { PumpControlPanel } from '@/components/control/PumpControlPanel';
 import { CalibrationInfo } from '@/components/control/CalibrationInfo';
-import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { SensorLog, SystemControl } from '@/lib/types/hidroponik';
-import { formatDateTime } from '@/lib/utils/hydroCalc';
-import { Database, Terminal, Shield, Clock } from 'lucide-react';
+import { RefreshCw, Database, Cpu, Sliders, Menu, X, Activity, History } from 'lucide-react';
+import { SystemControl } from '@/lib/types/hidroponik';
 
-export default function Home() {
+interface LogItem {
+  packet_id: string;
+  timestamp: string;
+  adc_raw: number;
+  voltage: string;
+  ppm_raw: number;
+  ppm_filtered: number;
+  relay: string;
+  is_active: boolean;
+}
+
+const LOGO_SRC = '/Bagas%20Hidrponik.jpg';
+
+export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'control' | 'history'>('dashboard');
-  const [loading, setLoading] = useState(false);
-  const [dbInitMsg, setDbInitMsg] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // State data
-  const [latestLog, setLatestLog] = useState<SensorLog>({
-    adc_raw: 0,
-    tegangan: 0.0,
-    ppm_raw: 68.5,
-    ppm_stabil: 68.5,
-    status_pompa: false,
-    created_at: '',
+  const [telemetry, setTelemetry] = useState({
+    ppmStabil: 630.5,
+    ppmRaw: 635.0,
+    voltage: 1.176,
+    adcRaw: 1450,
+    temperature: 25.0,
+    actualPumpActive: false,
+    isOnline: true,
   });
 
-  const [history, setHistory] = useState<SensorLog[]>([]);
-  const [control, setControl] = useState<SystemControl>({
-    id: 'default',
+  const [controlState, setControlState] = useState<SystemControl>({
+    id: '1',
     pump_mode: 'auto',
     pump_state: false,
-    target_ppm_min: 560.0,
-    target_ppm_max: 840.0,
+    target_ppm_min: 560,
+    target_ppm_max: 840,
     cooldown_minutes: 60,
   });
 
-  const [cooldownInfo, setCooldownInfo] = useState<{
-    is_in_cooldown: boolean;
-    remaining_seconds: number;
-    remaining_minutes: number;
-  }>({
-    is_in_cooldown: false,
-    remaining_seconds: 0,
-    remaining_minutes: 0,
-  });
+  const [logs, setLogs] = useState<LogItem[]>([
+    { packet_id: '#5', timestamp: '18 Nov, 20:00.46', adc_raw: 1450, voltage: '1.176 V', ppm_raw: 635.0, ppm_filtered: 630.5, relay: 'MATI', is_active: false },
+    { packet_id: '#4', timestamp: '18 Nov, 19:58.46', adc_raw: 1445, voltage: '1.164 V', ppm_raw: 628.7, ppm_filtered: 622.4, relay: 'MATI', is_active: false },
+    { packet_id: '#3', timestamp: '18 Nov, 19:56.46', adc_raw: 1420, voltage: '1.144 V', ppm_raw: 615.2, ppm_filtered: 612.0, relay: 'MENYALA', is_active: true },
+  ]);
 
-  const [isDbActive, setIsDbActive] = useState(false);
-  const [isOnline, setIsOnline] = useState(false); // Default: Offline (Merah)
-
-  // Fetch telemetry & history
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-
-      const resSensor = await fetch('/api/sensor');
-      if (resSensor.ok) {
-        const json = await resSensor.json();
-        if (json.data) {
-          setLatestLog(json.data);
-        }
-        // Heartbeat verification (ESP32 sends every 5s; if >15s without packets -> OFFLINE)
-        if (json.is_online !== undefined) {
-          setIsOnline(Boolean(json.is_online));
-        } else if (json.data?.created_at) {
-          const logTime = new Date(json.data.created_at).getTime();
-          const diff = Math.round((Date.now() - logTime) / 1000);
-          setIsOnline(diff >= 0 && diff <= 15);
-        } else {
-          setIsOnline(false);
-        }
-        if (json.control) {
-          setControl(json.control);
-        }
-        if (json.cooldown) {
-          setCooldownInfo(json.cooldown);
-        }
-      } else {
-        setIsOnline(false);
-      }
-
-      const resHist = await fetch('/api/history?limit=30');
-      if (resHist.ok) {
-        const jsonHist = await resHist.json();
-        if (jsonHist.data) {
-          setHistory(jsonHist.data);
-          setIsDbActive(true);
-        }
-      }
-    } catch (err) {
-      console.warn('Network sync error:', err);
-      setIsOnline(false);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Polling loop: 2 detik saat mode manual agar sat-set, 4 detik saat auto
-  useEffect(() => {
-    fetchData();
-    const intervalMs = control.pump_mode === 'manual' ? 2000 : 4000;
-    const timer = setInterval(fetchData, intervalMs);
-    return () => clearInterval(timer);
-  }, [fetchData, control.pump_mode]);
-
-  // Real-time local countdown timer: kurangi 1 detik setiap detik agar timer countdown berjalan mulus (misal: 1m 22s -> 1m 21s)
-  useEffect(() => {
-    if (!cooldownInfo.is_in_cooldown || cooldownInfo.remaining_seconds <= 0) return;
-
-    const timer = setInterval(() => {
-      setCooldownInfo((prev) => {
-        if (!prev.is_in_cooldown || prev.remaining_seconds <= 1) {
-          return {
-            is_in_cooldown: false,
-            remaining_seconds: 0,
-            remaining_minutes: 0,
-          };
-        }
-        const nextSec = prev.remaining_seconds - 1;
-        return {
-          is_in_cooldown: true,
-          remaining_seconds: nextSec,
-          remaining_minutes: Math.ceil(nextSec / 60),
-        };
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [cooldownInfo.is_in_cooldown, cooldownInfo.remaining_seconds > 0]);
-
-  // Handle control update dengan Optimistic UI (Sat-set & Instan)
   const handleUpdateControl = async (params: {
     mode?: 'auto' | 'manual';
     state?: boolean;
@@ -141,316 +58,376 @@ export default function Home() {
     target_ppm_max?: number;
     cooldown_minutes?: number;
   }) => {
-    // 1. Optimistic local update langsung tanpa menunggu roundtrip server
-    setControl((prev) => ({
-      ...prev,
-      pump_mode: params.mode ?? prev.pump_mode,
-      pump_state: params.state !== undefined ? params.state : prev.pump_state,
-      target_ppm_min: params.target_ppm_min ?? prev.target_ppm_min,
-      target_ppm_max: params.target_ppm_max ?? prev.target_ppm_max,
-      cooldown_minutes: params.cooldown_minutes ?? prev.cooldown_minutes,
-    }));
+    const updatedState = {
+      ...controlState,
+      ...(params.mode !== undefined && { pump_mode: params.mode }),
+      ...(params.state !== undefined && { pump_state: params.state }),
+      ...(params.target_ppm_min !== undefined && { target_ppm_min: params.target_ppm_min }),
+      ...(params.target_ppm_max !== undefined && { target_ppm_max: params.target_ppm_max }),
+      ...(params.cooldown_minutes !== undefined && { cooldown_minutes: params.cooldown_minutes }),
+    };
 
-    try {
-      const res = await fetch('/api/control', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.control) {
-          setControl(json.control);
-        }
-        // Segera refresh telemetri
-        fetchData();
-      } else {
-        const errJson = await res.json().catch(() => ({}));
-        console.error('Control update error:', errJson);
-        alert('Gagal menyimpan konfigurasi: ' + (errJson.error || 'Koneksi error'));
-        fetchData();
-      }
-    } catch (err) {
-      console.error('Failed to update control:', err);
-      fetchData();
+    setControlState(updatedState);
+
+    if (params.state !== undefined) {
+      setTelemetry((prev) => ({ ...prev, actualPumpActive: params.state! }));
+
+      const now = new Date();
+      const timeString = `${now.getDate()} Nov, ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}.${now.getSeconds().toString().padStart(2, '0')}`;
+
+      const newLogItem: LogItem = {
+        packet_id: `#${logs.length + 1}`,
+        timestamp: timeString,
+        adc_raw: telemetry.adcRaw,
+        voltage: `${telemetry.voltage.toFixed(3)} V`,
+        ppm_raw: telemetry.ppmRaw,
+        ppm_filtered: telemetry.ppmStabil,
+        relay: params.state ? 'MENYALA' : 'MATI',
+        is_active: params.state,
+      };
+
+      setLogs((prevLogs) => [newLogItem, ...prevLogs]);
     }
   };
 
-  // Re-run DB check
-  const handleInitDb = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/init-db');
-      const data = await res.json();
-      setDbInitMsg(data.message || 'Database Ready');
-      setIsDbActive(data.status === 'success');
-      fetchData();
-    } catch (err: any) {
-      setDbInitMsg('Error: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
+  const handleSelectTab = (tab: 'dashboard' | 'control' | 'history') => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 p-4 font-sans text-zinc-900 antialiased dark:bg-[#090a0b] dark:text-zinc-100 md:p-6 lg:p-8">
-      <div className="mx-auto max-w-6xl space-y-5">
-        {/* Top Header Command Bar */}
-        <DashboardHeader
-          lastUpdated={latestLog?.created_at}
-          isOnline={isOnline}
-          isDbActive={isDbActive}
-          isRefreshing={loading}
-          onRefresh={fetchData}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-        />
+    <div className="flex min-h-screen bg-zinc-100 text-zinc-950 font-sans">
+      {/* Sidebar Desktop */}
+      <div className="hidden md:flex shrink-0">
+        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      </div>
 
-        {/* TAB 1: TELEMETRY OVERVIEW */}
-        {activeTab === 'dashboard' && (
-          <div className="space-y-5">
-            {/* Minimalist Status Strip */}
-            <StatusBanner 
-              ppm={latestLog.ppm_stabil} 
-              targetMin={control.target_ppm_min || 560} 
-              targetMax={control.target_ppm_max || 840} 
-            />
-
-            {/* Core KPI Telemetry Deck */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <TDSMetricCard
-                ppmStabil={latestLog.ppm_stabil}
-                ppmRaw={latestLog.ppm_raw}
-                targetMin={control.target_ppm_min || 560}
-                targetMax={control.target_ppm_max || 840}
-              />
-              <VoltageCard
-                tegangan={latestLog.tegangan}
-                adcRaw={latestLog.adc_raw}
-              />
-            </div>
-
-            {/* Actuator & Threshold Status Row */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 font-mono">
-              <Card>
-                <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">
-                  STATUS POMPA AIR (PIN 23)
-                </div>
-                <div className="mt-2 flex items-baseline justify-between">
-                  <span className={`text-xl font-bold tracking-tight ${latestLog.status_pompa ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-500'}`}>
-                    {latestLog.status_pompa ? 'MENYALA (ON)' : 'MATI (OFF)'}
-                  </span>
-                  <Badge variant={latestLog.status_pompa ? 'success' : 'neutral'} dot={latestLog.status_pompa}>
-                    {latestLog.status_pompa ? 'AKTIF' : 'STANDBY'}
-                  </Badge>
-                </div>
-              </Card>
-
-              <Card>
-                <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">
-                  MODE KONTROL
-                </div>
-                <div className="mt-2 flex items-baseline justify-between">
-                  <span className="text-xl font-bold tracking-tight uppercase">
-                    {control.pump_mode === 'auto' ? 'OTOMATIS' : 'MANUAL'}
-                  </span>
-                  <Badge variant={control.pump_mode === 'auto' ? 'success' : 'neutral'}>
-                    {control.pump_mode === 'auto' ? 'CLOSED-LOOP' : 'SAKLAR'}
-                  </Badge>
-                </div>
-              </Card>
-
-              <Card>
-                <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">
-                  TARGET WINDOW & COOLDOWN
-                </div>
-                <div className="mt-2 flex items-baseline justify-between">
-                  <span className="text-xl font-bold tracking-tight">
-                    {control.target_ppm_min || 560} &ndash; {control.target_ppm_max || 840}{' '}
-                    <span className="text-xs font-normal text-zinc-400">PPM</span>
-                  </span>
-                  <Badge variant={cooldownInfo.is_in_cooldown ? 'warning' : 'neutral'}>
-                    {cooldownInfo.is_in_cooldown
-                      ? `REST: ${Math.floor(cooldownInfo.remaining_seconds / 60)}m ${(cooldownInfo.remaining_seconds % 60).toString().padStart(2, '0')}s`
-                      : `${control.cooldown_minutes || 60}m CD`}
-                  </Badge>
-                </div>
-              </Card>
-            </div>
-
-            {/* Rolling Time-Series Chart */}
-            <SensorChart
-              data={history.length > 0 ? history : [latestLog]}
-              targetMin={control.target_ppm_min || 560}
-              targetMax={control.target_ppm_max || 840}
-            />
-
-            {/* Recent Telemetry Stream (Latest on top) */}
-            <Card
-              title="RECENT INCOMING TELEMETRY STREAM"
-              subtitle="Latest 5 sample packets received via HTTPS &bull; Newest on top"
+      {/* Drawer Sidebar Mode HP */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          <div
+            className="fixed inset-0 bg-zinc-950/60"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <div className="relative z-10 flex flex-col h-full shadow-2xl">
+            <Sidebar activeTab={activeTab} setActiveTab={handleSelectTab} />
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              aria-label="Tutup menu"
+              className="absolute top-3 right-3 p-1.5 rounded-lg bg-emerald-800 text-white border border-emerald-600/50 hover:bg-emerald-700 cursor-pointer"
             >
-              <div className="overflow-x-auto">
-                <table className="w-full text-left font-mono text-xs">
-                  <thead className="border-b border-zinc-200 bg-zinc-50/80 font-semibold text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400">
-                    <tr>
-                      <th className="py-2 px-3">PACKET_ID</th>
-                      <th className="py-2 px-3">TIMESTAMP</th>
-                      <th className="py-2 px-3">ADC_RAW</th>
-                      <th className="py-2 px-3">VOLTAGE</th>
-                      <th className="py-2 px-3">PPM_RAW</th>
-                      <th className="py-2 px-3">PPM_FILTERED</th>
-                      <th className="py-2 px-3">RELAY</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/70">
-                    {[...(history.length > 0 ? history : [latestLog])]
-                      .reverse()
-                      .slice(0, 5)
-                      .map((log, idx) => (
-                        <tr
-                          key={idx}
-                          className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/40 ${
-                            idx === 0 ? 'bg-emerald-500/5 font-semibold text-zinc-950 dark:text-zinc-50' : 'text-zinc-600 dark:text-zinc-400'
-                          }`}
-                        >
-                          <td className="py-2 px-3">
-                            <span className="flex items-center gap-1.5">
-                              #{log.id ?? (history.length - idx)}
-                              {idx === 0 && (
-                                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              )}
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto pb-20 md:pb-0">
+        {/* Header Atas Responsif */}
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-zinc-300 bg-white px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4 shadow-xs">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Buka menu"
+              className="md:hidden shrink-0 p-2 rounded-lg border border-zinc-300 bg-zinc-50 text-zinc-900 hover:bg-zinc-100 cursor-pointer"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+
+            <img
+              src={LOGO_SRC}
+              alt="Logo Hydro"
+              className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl object-cover border border-zinc-300 shadow-xs shrink-0"
+            />
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs sm:text-sm font-black tracking-wider text-emerald-800 uppercase">
+                  HYDRO
+                </span>
+                <span className="text-zinc-400 font-bold">/</span>
+                <h1 className="text-sm sm:text-base font-black tracking-tight text-zinc-950 truncate">
+                  Monitoring &amp; Kontrol Hidroponik
+                </h1>
+              </div>
+              <p className="text-[11px] sm:text-xs font-semibold text-zinc-800 mt-0.5 truncate">
+                ESP32 ADC GPIO 34 (TDS) &bull; GPIO 23 (Relay) &bull; Vercel Postgres
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <Badge
+              variant={telemetry.isOnline ? 'success' : 'danger'}
+              dot
+              className="font-mono text-[10px] sm:text-xs font-bold"
+            >
+              {telemetry.isOnline ? 'POSTGRES LIVE' : 'OFFLINE'}
+            </Badge>
+            <button
+              onClick={() => window.location.reload()}
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-400 bg-white px-2.5 sm:px-3.5 py-1.5 text-xs font-bold text-zinc-900 shadow-xs hover:bg-zinc-50 transition-all cursor-pointer"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Sync</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Konten Utama */}
+        <div className="p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-6 max-w-7xl w-full mx-auto">
+          {/* TAB 1: TELEMETRY OVERVIEW */}
+          {activeTab === 'dashboard' && (
+            <>
+              <div suppressHydrationWarning>
+                <StatusBanner ppm={telemetry.ppmStabil} />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <div className="rounded-2xl border border-zinc-300 bg-white p-4 sm:p-6 shadow-sm hover:shadow-md transition">
+                  <div className="flex items-center justify-between gap-2 mb-4 border-b border-zinc-200 pb-3">
+                    <span className="font-mono text-[11px] sm:text-xs font-black tracking-wider text-zinc-900">
+                      NUTRIENT CONCENTRATION (TDS)
+                    </span>
+                    <span className="shrink-0 rounded bg-emerald-100 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-900 border border-emerald-300">
+                      IN SPEC (OPTIMAL)
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div>
+                      <span className="font-mono text-4xl sm:text-5xl font-black text-zinc-950">
+                        {telemetry.ppmStabil}
+                      </span>
+                      <span className="ml-2 font-mono text-xs sm:text-sm font-bold text-zinc-800">PPM</span>
+                    </div>
+                    <div className="text-right font-mono text-xs">
+                      <span className="text-zinc-700 block font-bold">RAW DELTA</span>
+                      <span className="font-extrabold text-amber-800">-4.5 ppm</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-zinc-200 flex flex-col sm:flex-row sm:justify-between gap-1 font-mono text-xs text-zinc-900 font-bold">
+                    <span>
+                      UNFILTERED ADC READ: <strong className="text-zinc-950">{telemetry.ppmRaw} ppm</strong>
+                    </span>
+                    <span>
+                      SMOOTHING FACTOR: <strong className="text-zinc-950">&alpha; = 0.20</strong>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-zinc-300 bg-white p-4 sm:p-6 shadow-sm hover:shadow-md transition">
+                  <div className="flex items-center justify-between gap-2 mb-4 border-b border-zinc-200 pb-3">
+                    <span className="font-mono text-[11px] sm:text-xs font-black tracking-wider text-zinc-900 flex items-center gap-1.5">
+                      <Cpu className="h-4 w-4 shrink-0 text-sky-800" />
+                      ANALOG-TO-DIGITAL CONVERSION (ADC)
+                    </span>
+                    <span className="shrink-0 rounded bg-zinc-200 px-2 py-0.5 font-mono text-[10px] font-bold text-zinc-900 border border-zinc-300">
+                      12-BIT (4096 LSB)
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div>
+                      <span className="font-mono text-4xl sm:text-5xl font-black text-zinc-950">
+                        {telemetry.voltage.toFixed(3)}
+                      </span>
+                      <span className="ml-2 font-mono text-xs sm:text-sm font-bold text-zinc-800">VOLTS (DC)</span>
+                    </div>
+                    <div className="text-right font-mono text-xs">
+                      <span className="text-zinc-700 block font-bold">BIT DENSITY</span>
+                      <span className="font-extrabold text-zinc-950">{telemetry.adcRaw} / 4095</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-zinc-200 flex flex-col sm:flex-row sm:justify-between gap-1 font-mono text-xs text-zinc-900 font-bold">
+                    <span>
+                      TEMP REF: <strong className="text-zinc-950">{telemetry.temperature.toFixed(1)} &deg;C</strong>
+                    </span>
+                    <span>
+                      QUANTIZATION: <strong className="text-zinc-950">~0.806 mV/LSB</strong>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-300 bg-white p-4 sm:p-6 shadow-sm">
+                <div className="mb-4">
+                  <h2 className="font-mono text-xs font-black tracking-wider text-zinc-950">
+                    TELEMETRY TIME-SERIES (TDS BUFFER)
+                  </h2>
+                  <p className="font-mono text-xs text-zinc-800 mt-0.5 font-bold">
+                    Realtime Rolling Window &bull; 3 Sample Points
+                  </p>
+                </div>
+                <div className="h-44 sm:h-48 flex items-center justify-center border border-dashed border-zinc-300 rounded-xl bg-zinc-50 font-mono text-xs font-bold text-zinc-800 px-3 text-center">
+                  [REALTIME ROLLING WINDOW CHART ACTIVE]
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* TAB 2: ACTUATOR & DOSING ENGINE */}
+          {activeTab === 'control' && (
+            <div className="space-y-5 sm:space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <PumpControlPanel
+                  control={controlState}
+                  actualPumpActive={telemetry.actualPumpActive}
+                  onUpdateControl={handleUpdateControl}
+                />
+
+                <div className="rounded-2xl border border-zinc-300 bg-white p-4 sm:p-6 shadow-sm space-y-4">
+                  <div className="border-b border-zinc-200 pb-3">
+                    <h2 className="font-mono text-xs font-black tracking-wider text-zinc-950 flex items-center gap-1.5">
+                      <Sliders className="h-4 w-4 shrink-0 text-emerald-800" />
+                      DOSING ENGINE PARAMETERS &amp; SETPOINTS
+                    </h2>
+                    <p className="font-mono text-xs text-zinc-800 mt-0.5 font-bold">
+                      Configured relay trigger thresholds &amp; cooldown timers
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4 font-mono">
+                    <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4">
+                      <span className="text-[10px] font-black text-zinc-800 uppercase">Min Threshold (ON)</span>
+                      <div className="text-lg sm:text-xl font-black text-zinc-950 mt-1">
+                        {controlState.target_ppm_min}{' '}
+                        <span className="text-xs font-bold text-zinc-800">PPM</span>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4">
+                      <span className="text-[10px] font-black text-zinc-800 uppercase">Target Cap (OFF)</span>
+                      <div className="text-lg sm:text-xl font-black text-zinc-950 mt-1">
+                        {controlState.target_ppm_max}{' '}
+                        <span className="text-xs font-bold text-zinc-800">PPM</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 font-mono">
+                    <span className="text-[10px] font-black text-zinc-800 uppercase">Cooldown Window</span>
+                    <div className="text-base sm:text-lg font-black text-zinc-950 mt-0.5">
+                      {controlState.cooldown_minutes} Minutes{' '}
+                      <span className="text-xs font-bold text-zinc-800">(&bull; Max 1x cycle per duration)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <CalibrationInfo />
+            </div>
+          )}
+
+          {/* TAB 3: DATABASE LOG & CALIBRATION */}
+          {activeTab === 'history' && (
+            <div className="space-y-5 sm:space-y-6 font-mono">
+              <div className="rounded-2xl border border-zinc-800 bg-[#121418] p-4 sm:p-6 text-zinc-100 shadow-lg">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <div>
+                    <h2 className="text-xs font-bold tracking-wider text-white flex items-center gap-2">
+                      <Database className="h-4 w-4 shrink-0 text-emerald-400" />
+                      DATABASE STORAGE CONNECTOR
+                    </h2>
+                    <p className="text-xs text-zinc-300 mt-0.5 font-semibold">
+                      Vercel Postgres (Neon Serverless Pool)
+                    </p>
+                  </div>
+                  <button className="self-start sm:self-auto rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-bold text-zinc-100 hover:bg-zinc-700 transition cursor-pointer">
+                    INIT SCHEMA
+                  </button>
+                </div>
+                <p className="text-xs text-zinc-300 border-t border-zinc-800/80 pt-3 font-semibold">
+                  Schema Tables: <span className="text-emerald-400 font-bold">sensor_logs</span> &bull;{' '}
+                  <span className="text-emerald-400 font-bold">system_control</span>.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-800 bg-[#121418] p-4 sm:p-6 text-zinc-100 shadow-lg">
+                <div className="mb-4">
+                  <h2 className="text-xs font-bold tracking-wider text-white">TELEMETRY ARCHIVE (POSTGRES LOGS)</h2>
+                  <p className="text-xs text-zinc-300 mt-0.5 font-semibold">
+                    Chronological audit trail of all sensor transmissions &bull; Newest first
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto max-h-96 rounded-xl border border-zinc-800 bg-[#0d0f12]">
+                  <table className="w-full min-w-160 text-left text-xs">
+                    <thead className="sticky top-0 bg-[#121418] border-b border-zinc-800 text-zinc-300 font-bold">
+                      <tr>
+                        <th className="p-3 whitespace-nowrap">PACKET_ID</th>
+                        <th className="p-3 whitespace-nowrap">TIMESTAMP</th>
+                        <th className="p-3 whitespace-nowrap">ADC_RAW</th>
+                        <th className="p-3 whitespace-nowrap">VOLTAGE</th>
+                        <th className="p-3 whitespace-nowrap">PPM_RAW</th>
+                        <th className="p-3 whitespace-nowrap">PPM_FILTERED</th>
+                        <th className="p-3 whitespace-nowrap">RELAY</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-900 text-zinc-100 font-bold">
+                      {logs.map((log, index) => (
+                        <tr key={`${log.packet_id}-${index}`} className="hover:bg-zinc-900/50 transition">
+                          <td className="p-3 whitespace-nowrap text-white">{log.packet_id}</td>
+                          <td className="p-3 whitespace-nowrap text-zinc-300">{log.timestamp}</td>
+                          <td className="p-3 whitespace-nowrap">{log.adc_raw}</td>
+                          <td className="p-3 whitespace-nowrap">{log.voltage}</td>
+                          <td className="p-3 whitespace-nowrap">{log.ppm_raw.toFixed(1)}</td>
+                          <td className="p-3 whitespace-nowrap text-emerald-400">{log.ppm_filtered.toFixed(1)}</td>
+                          <td className="p-3 whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1.5">
+                              <span
+                                className={`inline-block h-2 w-2 rounded-full ${
+                                  log.is_active ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-400'
+                                }`}
+                              />
+                              {log.relay}
                             </span>
-                          </td>
-                          <td className="py-2 px-3 text-zinc-500">
-                            {formatDateTime(log.created_at)}
-                          </td>
-                          <td className="py-2 px-3">{log.adc_raw}</td>
-                          <td className="py-2 px-3">{log.tegangan.toFixed(3)} V</td>
-                          <td className="py-2 px-3">{log.ppm_raw.toFixed(1)}</td>
-                          <td className="py-2 px-3 text-emerald-600 dark:text-emerald-400 font-bold">
-                            {log.ppm_stabil.toFixed(1)}
-                          </td>
-                          <td className="py-2 px-3">
-                            <Badge variant={log.status_pompa ? 'success' : 'neutral'}>
-                              {log.status_pompa ? 'MENYALA' : 'MATI'}
-                            </Badge>
                           </td>
                         </tr>
                       ))}
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </Card>
-          </div>
-        )}
 
-        {/* TAB 2: ACTUATOR & DOSING ENGINE */}
-        {activeTab === 'control' && (
-          <div className="space-y-5">
-            <PumpControlPanel
-              control={control}
-              actualPumpActive={latestLog.status_pompa}
-              cooldownInfo={cooldownInfo}
-              onUpdateControl={handleUpdateControl}
-            />
-            <CalibrationInfo />
-          </div>
-        )}
+              <CalibrationInfo />
+            </div>
+          )}
+        </div>
+      </main>
 
-        {/* TAB 3: DATABASE LOG & CALIBRATION */}
-        {activeTab === 'history' && (
-          <div className="space-y-5">
-            {/* Database Diagnostics */}
-            <Card
-              title="DATABASE STORAGE CONNECTOR"
-              subtitle="Vercel Postgres (Neon Serverless Pool)"
-              action={
-                <Button size="sm" onClick={handleInitDb} loading={loading} className="font-mono text-xs h-7">
-                  <Database className="h-3 w-3" />
-                  INIT SCHEMA
-                </Button>
-              }
-            >
-              <div className="text-xs font-mono text-zinc-500">
-                <p>
-                  Schema Tables: <code>sensor_logs</code> (telemetry time-series) &bull;{' '}
-                  <code>system_control</code> (actuator setpoints & cooldown timers).
-                </p>
-                {dbInitMsg && (
-                  <p className="mt-2 font-mono text-emerald-600 dark:text-emerald-400">
-                    &gt; {dbInitMsg}
-                  </p>
-                )}
-              </div>
-            </Card>
+      {/* Bottom Tab Bar Khusus Mode HP */}
+      <nav
+        aria-label="Navigasi bawah mobile"
+        className="fixed bottom-0 inset-x-0 z-30 flex md:hidden items-center justify-around border-t border-zinc-300 bg-white py-1.5 px-2 shadow-lg font-mono"
+      >
+        <button
+          onClick={() => setActiveTab('dashboard')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg text-[10px] font-black transition cursor-pointer ${
+            activeTab === 'dashboard' ? 'bg-emerald-100 text-emerald-950' : 'text-zinc-700'
+          }`}
+        >
+          <Activity className="h-4 w-4" />
+          <span>TELEMETRY</span>
+        </button>
 
-            {/* Complete Historical Table */}
-            <Card
-              title="TELEMETRY ARCHIVE (POSTGRES LOGS)"
-              subtitle="Chronological audit trail of all sensor transmissions &bull; Newest first"
-            >
-              <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-                <table className="w-full text-left font-mono text-xs">
-                  <thead className="sticky top-0 border-b border-zinc-200 bg-zinc-50 font-semibold text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/90 dark:text-zinc-400">
-                    <tr>
-                      <th className="py-2 px-3">ID</th>
-                      <th className="py-2 px-3">TIMESTAMP</th>
-                      <th className="py-2 px-3">ADC</th>
-                      <th className="py-2 px-3">VOLT</th>
-                      <th className="py-2 px-3">PPM_RAW</th>
-                      <th className="py-2 px-3">PPM_STABIL</th>
-                      <th className="py-2 px-3">RELAY</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/70">
-                    {[...(history.length > 0 ? history : [latestLog])].reverse().map((log, idx) => (
-                      <tr
-                        key={idx}
-                        className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/30 ${
-                          idx === 0 ? 'bg-emerald-500/5 font-semibold text-zinc-950 dark:text-zinc-50' : 'text-zinc-600 dark:text-zinc-400'
-                        }`}
-                      >
-                        <td className="py-1.5 px-3">
-                          <span className="flex items-center gap-1.5">
-                            #{log.id ?? (history.length - idx)}
-                            {idx === 0 && (
-                              <Badge variant="success" className="text-[9px] py-0 px-1">
-                                LATEST
-                              </Badge>
-                            )}
-                          </span>
-                        </td>
-                        <td className="py-1.5 px-3 text-zinc-500">
-                          {formatDateTime(log.created_at)}
-                        </td>
-                        <td className="py-1.5 px-3">{log.adc_raw}</td>
-                        <td className="py-1.5 px-3">{log.tegangan.toFixed(3)} V</td>
-                        <td className="py-1.5 px-3">{log.ppm_raw.toFixed(1)}</td>
-                        <td className="py-1.5 px-3 font-bold text-emerald-600 dark:text-emerald-400">
-                          {log.ppm_stabil.toFixed(1)}
-                        </td>
-                        <td className="py-1.5 px-3">
-                          <Badge variant={log.status_pompa ? 'success' : 'neutral'}>
-                            {log.status_pompa ? 'MENYALA' : 'MATI'}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
+        <button
+          onClick={() => setActiveTab('control')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg text-[10px] font-black transition cursor-pointer ${
+            activeTab === 'control' ? 'bg-emerald-100 text-emerald-950' : 'text-zinc-700'
+          }`}
+        >
+          <Sliders className="h-4 w-4" />
+          <span>CONTROL</span>
+        </button>
 
-            <CalibrationInfo />
-          </div>
-        )}
-
-        {/* Minimal Engineering Footer */}
-        <footer className="border-t border-zinc-200/80 pt-4 text-center font-mono text-[11px] text-zinc-400 dark:border-zinc-800/80">
-          HYDRO//LAB &bull; Next.js 16 (Turbopack) &bull; Vercel Serverless &bull; Neon Postgres &bull; ESP32 IoT
-        </footer>
-      </div>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg text-[10px] font-black transition cursor-pointer ${
+            activeTab === 'history' ? 'bg-emerald-100 text-emerald-950' : 'text-zinc-700'
+          }`}
+        >
+          <History className="h-4 w-4" />
+          <span>LOGS</span>
+        </button>
+      </nav>
     </div>
   );
 }

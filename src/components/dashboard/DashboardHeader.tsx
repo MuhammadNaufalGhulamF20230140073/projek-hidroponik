@@ -41,7 +41,7 @@ export function DashboardHeader({
               <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">v2.4-edge</span>
             </div>
             <p className="text-[11px] font-mono text-zinc-500">
-              ESP32 GPIO 34 (TDS) &bull; GPIO 23 (Relay) &bull; Vercel Postgres
+              ESP32 GPIO 34 (TDS) • GPIO 23 (Relay) • Vercel Postgres
             </p>
           </div>
         </div>
@@ -93,7 +93,7 @@ export function DashboardHeader({
         <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-100/80 p-0.5 text-xs dark:border-zinc-800 dark:bg-zinc-900/90">
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`rounded-md px-3 py-1 font-medium transition-all ${
+            className={`rounded-md px-3 py-1 font-medium transition-all cursor-pointer ${
               activeTab === 'dashboard'
                 ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50'
                 : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
@@ -103,7 +103,7 @@ export function DashboardHeader({
           </button>
           <button
             onClick={() => setActiveTab('control')}
-            className={`rounded-md px-3 py-1 font-medium transition-all ${
+            className={`rounded-md px-3 py-1 font-medium transition-all cursor-pointer ${
               activeTab === 'control'
                 ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50'
                 : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
@@ -113,7 +113,7 @@ export function DashboardHeader({
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`rounded-md px-3 py-1 font-medium transition-all ${
+            className={`rounded-md px-3 py-1 font-medium transition-all cursor-pointer ${
               activeTab === 'history'
                 ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50'
                 : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'

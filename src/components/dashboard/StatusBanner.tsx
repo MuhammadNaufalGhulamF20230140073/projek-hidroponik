@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { getSolutionStatus } from '@/lib/utils/hydroCalc';
 import { CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
@@ -13,25 +15,25 @@ export function StatusBanner({ ppm, targetMin = 560, targetMax = 840 }: StatusBa
 
   const statusConfig = {
     optimal: {
-      border: 'border-emerald-500/30 dark:border-emerald-500/20',
-      bg: 'bg-emerald-500/5 dark:bg-emerald-500/5',
-      text: 'text-emerald-800 dark:text-emerald-300',
+      border: 'border-emerald-400',
+      bg: 'bg-emerald-50',
+      text: 'text-emerald-950',
       tag: 'SYS_STATUS: OPTIMAL',
-      icon: <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />,
+      icon: <CheckCircle2 className="h-4 w-4 text-emerald-700 shrink-0" />,
     },
     rendah: {
-      border: 'border-amber-500/30 dark:border-amber-500/20',
-      bg: 'bg-amber-500/5 dark:bg-amber-500/5',
-      text: 'text-amber-800 dark:text-amber-300',
+      border: 'border-amber-400',
+      bg: 'bg-amber-50',
+      text: 'text-amber-950',
       tag: 'SYS_STATUS: BELOW_MINIMUM',
-      icon: <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />,
+      icon: <AlertCircle className="h-4 w-4 text-amber-700 shrink-0" />,
     },
     tinggi: {
-      border: 'border-rose-500/30 dark:border-rose-500/20',
-      bg: 'bg-rose-500/5 dark:bg-rose-500/5',
-      text: 'text-rose-800 dark:text-rose-300',
+      border: 'border-rose-400',
+      bg: 'bg-rose-50',
+      text: 'text-rose-950',
       tag: 'SYS_STATUS: CRITICAL_HIGH',
-      icon: <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />,
+      icon: <AlertTriangle className="h-4 w-4 text-rose-700 shrink-0" />,
     },
   };
 
@@ -39,15 +41,16 @@ export function StatusBanner({ ppm, targetMin = 560, targetMax = 840 }: StatusBa
 
   return (
     <div
-      className={`flex items-center justify-between rounded-lg border px-3.5 py-2.5 text-xs font-mono transition-all ${current.border} ${current.bg}`}
+      suppressHydrationWarning
+      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border px-4 py-3 text-xs font-mono shadow-xs transition-all ${current.border} ${current.bg}`}
     >
       <div className="flex items-center gap-2.5">
         {current.icon}
-        <span className={`font-semibold tracking-tight ${current.text}`}>
+        <span className={`font-black tracking-tight ${current.text}`}>
           [{current.tag}] &bull; {label}
         </span>
       </div>
-      <div className="hidden sm:block text-[11px] text-zinc-500 dark:text-zinc-400 font-sans">
+      <div className="text-xs font-semibold text-zinc-900 font-sans">
         {description}
       </div>
     </div>
