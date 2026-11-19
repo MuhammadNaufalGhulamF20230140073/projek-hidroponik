@@ -7,8 +7,9 @@ import { SensorChart } from '@/components/dashboard/SensorChart';
 import { PumpControlPanel } from '@/components/control/PumpControlPanel';
 import { CalibrationInfo } from '@/components/control/CalibrationInfo';
 import { Badge } from '@/components/ui/Badge';
-import { RefreshCw, Database, Cpu, Sliders, Menu, X, Activity, History, Droplets } from 'lucide-react';
+import { RefreshCw, Database, Cpu, Sliders, Menu, X, Activity, History, Droplets, AlertTriangle } from 'lucide-react';
 import { SystemControl } from '@/lib/types/hidroponik';
+import { ManualSafetyAlertModal } from '@/components/control/ManualSafetyAlertModal';
 
 interface LogItem {
   packet_id: string;
@@ -123,6 +124,11 @@ export default function DashboardPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isInitializingDb, setIsInitializingDb] = useState(false);
   const [dbInitMessage, setDbInitMessage] = useState<string | null>(null);
+
+  // State untuk Pop-up Alert Keselamatan Mode Manual saat Pindah Menu
+  const [pendingTargetTab, setPendingTargetTab] = useState<'dashboard' | 'control' | 'history' | null>(null);
+  const [showManualAlert, setShowManualAlert] = useState(false);
+  const [isSwitchingAuto, setIsSwitchingAuto] = useState(false);
 
   // Mencegah race-condition polling background menimpa state transisi user (anti-kedut)
   const lastControlUpdateRef = useRef<number>(0);
@@ -385,15 +391,90 @@ export default function DashboardPage() {
     }
   };
 
+  const isManualMode = controlState.pump_mode === 'manual';
+  const isPumpActive = isManualMode ? Boolean(controlState.pump_state) : telemetry.actualPumpActive;
+
+  // Pencegahan jika user menutup/reload tab browser saat pompa manual sedang aktif ON
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isManualMode && isPumpActive) {
+        e.preventDefault();
+        e.returnValue = 'Pompa masih menyala dalam mode manual!';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isManualMode, isPumpActive]);
+
+  const getTargetTabName = (tab: 'dashboard' | 'control' | 'history' | null) => {
+    if (tab === 'dashboard') return 'Ringkasan Nutrisi Air';
+    if (tab === 'history') return 'Riwayat Data Sensor';
+    return 'Pengaturan Pompa';
+  };
+
   const handleSelectTab = (tab: 'dashboard' | 'control' | 'history') => {
-    setActiveTab(tab);
     setMobileMenuOpen(false);
+
+    // Jika sistem saat ini dalam posisi MANUAL dan user berpindah ke tab lain (dashboard atau history):
+    if (tab !== 'control' && isManualMode) {
+      setPendingTargetTab(tab);
+      setShowManualAlert(true);
+      return;
+    }
+
+    setActiveTab(tab);
+  };
+
+  const handleCancelManualAlert = () => {
+    setShowManualAlert(false);
+    setPendingTargetTab(null);
+    setActiveTab('control'); // Tetap di tab kontrol
+  };
+
+  const handleConfirmLeaveManual = () => {
+    if (pendingTargetTab) {
+      setActiveTab(pendingTargetTab);
+    }
+    setShowManualAlert(false);
+    setPendingTargetTab(null);
+  };
+
+  const handleSwitchToAutoAndLeave = async () => {
+    setIsSwitchingAuto(true);
+    try {
+      // Matikan saklar dan ubah mode ke otomatis demi keselamatan tanaman & alat
+      await handleUpdateControl({
+        mode: 'auto',
+        state: false,
+      });
+      if (pendingTargetTab) {
+        setActiveTab(pendingTargetTab);
+      }
+      setShowManualAlert(false);
+      setPendingTargetTab(null);
+    } catch (err: any) {
+      alert(`Gagal mengamankan sistem: ${err?.message || 'Terjadi kesalahan sistem'}`);
+    } finally {
+      setIsSwitchingAuto(false);
+    }
   };
 
   const rawDelta = (telemetry.ppmStabil - telemetry.ppmRaw).toFixed(1);
 
   return (
     <div className="flex min-h-screen bg-zinc-100 text-zinc-950 font-sans">
+      {/* Pop-up Alert Peringatan Keselamatan jika Meninggalkan Mode Manual */}
+      <ManualSafetyAlertModal
+        isOpen={showManualAlert}
+        isPumpOn={isPumpActive}
+        targetTabName={getTargetTabName(pendingTargetTab)}
+        onCancel={handleCancelManualAlert}
+        onConfirmLeave={handleConfirmLeaveManual}
+        onSwitchToAutoAndLeave={handleSwitchToAutoAndLeave}
+        isProcessing={isSwitchingAuto}
+      />
+
       {/* Pop-up Menu Navigasi (Muncul saat tombol MENU diklik, tidak memenuhi layar) */}
       <Sidebar
         isOpen={mobileMenuOpen}
@@ -495,6 +576,34 @@ export default function DashboardPage() {
             </button>
           </div>
         </header>
+
+        {/* Banner Peringatan jika Sedang Berada di Luar Tab Kontrol dalam Mode Manual */}
+        {isManualMode && (
+          <div className={`px-3 sm:px-6 py-2 text-xs font-mono font-bold flex flex-wrap items-center justify-between gap-2 border-b shadow-2xs transition-colors duration-200 ${
+            isPumpActive 
+              ? 'bg-rose-100/90 text-rose-950 border-rose-400' 
+              : 'bg-amber-50 text-amber-950 border-amber-300'
+          }`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${
+                isPumpActive ? 'bg-rose-600 animate-ping' : 'bg-amber-500'
+              }`} />
+              <span className="truncate">
+                {isPumpActive 
+                  ? '⚠️ BAHAYA: POMPA MENYALA DALAM MODE MANUAL (ON)' 
+                  : '⚠️ PERINGATAN: SAKLAR POMPA DALAM MODE MANUAL'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => handleUpdateControl({ mode: 'auto', state: false })}
+                className="px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold cursor-pointer shadow-xs transition"
+              >
+                Ubah ke Otomatis
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Konten Utama */}
         <div className="p-3 sm:p-5 lg:p-6 space-y-3.5 sm:space-y-5 max-w-5xl w-full mx-auto">
