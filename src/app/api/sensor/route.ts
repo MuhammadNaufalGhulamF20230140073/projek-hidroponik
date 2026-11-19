@@ -96,9 +96,9 @@ export async function POST(req: Request) {
       control: {
         mode: control.pump_mode,
         state: control.pump_state,
-        target_ppm_min: Number(control.target_ppm_min || 560),
-        target_ppm_max: Number(control.target_ppm_max || 840),
-        cooldown_minutes: Number(control.cooldown_minutes || 60),
+        target_ppm_min: Number(control.target_ppm_min ?? 560),
+        target_ppm_max: Number(control.target_ppm_max ?? 840),
+        cooldown_minutes: Number(control.cooldown_minutes ?? 60),
       },
     });
   } catch (error: any) {

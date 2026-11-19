@@ -206,9 +206,9 @@ export async function getSystemControl(): Promise<SystemControl> {
     if (rows.length > 0) {
       return {
         ...rows[0],
-        cooldown_minutes: Number(rows[0].cooldown_minutes || 60),
-        target_ppm_min: Number(rows[0].target_ppm_min || 560),
-        target_ppm_max: Number(rows[0].target_ppm_max || 840),
+        cooldown_minutes: Number(rows[0].cooldown_minutes ?? 60),
+        target_ppm_min: Number(rows[0].target_ppm_min ?? 560),
+        target_ppm_max: Number(rows[0].target_ppm_max ?? 840),
       };
     }
 
@@ -281,8 +281,8 @@ export async function updatePumpControl(params: {
 
   return {
     ...rows[0],
-    cooldown_minutes: Number(rows[0].cooldown_minutes || 60),
-    target_ppm_min: Number(rows[0].target_ppm_min || 560),
-    target_ppm_max: Number(rows[0].target_ppm_max || 840),
+    cooldown_minutes: Number(rows[0].cooldown_minutes ?? 60),
+    target_ppm_min: Number(rows[0].target_ppm_min ?? 560),
+    target_ppm_max: Number(rows[0].target_ppm_max ?? 840),
   };
 }
