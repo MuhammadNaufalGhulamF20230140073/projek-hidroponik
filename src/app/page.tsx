@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { RefreshCw, Database, Cpu, Sliders, Menu, X, Activity, History, Droplets, AlertTriangle } from 'lucide-react';
 import { SystemControl } from '@/lib/types/hidroponik';
 import { ManualSafetyAlertModal } from '@/components/control/ManualSafetyAlertModal';
+import { UnsavedChangesModal } from '@/components/control/UnsavedChangesModal';
 
 interface LogItem {
   packet_id: string;
@@ -129,6 +130,13 @@ export default function DashboardPage() {
   const [pendingTargetTab, setPendingTargetTab] = useState<'dashboard' | 'control' | 'history' | null>(null);
   const [showManualAlert, setShowManualAlert] = useState(false);
   const [isSwitchingAuto, setIsSwitchingAuto] = useState(false);
+
+  // State untuk Pop-up Alert Perubahan Pengaturan Pompa yang Belum Disimpan
+  const [isConfigDirty, setIsConfigDirty] = useState(false);
+  const [showUnsavedAlert, setShowUnsavedAlert] = useState(false);
+  const [isSavingConfigFromAlert, setIsSavingConfigFromAlert] = useState(false);
+  const pumpControlSaveRef = useRef<(() => Promise<boolean>) | null>(null);
+  const pumpControlDiscardRef = useRef<(() => void) | null>(null);
 
   // Mencegah race-condition polling background menimpa state transisi user (anti-kedut)
   const lastControlUpdateRef = useRef<number>(0);
@@ -393,7 +401,7 @@ export default function DashboardPage() {
   const isManualMode = controlState.pump_mode === 'manual';
   const isPumpActive = isManualMode ? Boolean(controlState.pump_state) : telemetry.actualPumpActive;
 
-  // Pencegahan jika user menutup/reload tab browser saat pompa manual sedang aktif ON
+  // Pencegahan jika user menutup/reload tab browser saat pompa manual sedang aktif ON atau ada editan belum disimpan
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isManualMode && isPumpActive) {
@@ -401,10 +409,15 @@ export default function DashboardPage() {
         e.returnValue = 'Pompa masih menyala dalam mode manual!';
         return e.returnValue;
       }
+      if (isConfigDirty) {
+        e.preventDefault();
+        e.returnValue = 'Ada perubahan pengaturan pompa yang belum disimpan!';
+        return e.returnValue;
+      }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isManualMode, isPumpActive]);
+  }, [isManualMode, isPumpActive, isConfigDirty]);
 
   const getTargetTabName = (tab: 'dashboard' | 'control' | 'history' | null) => {
     if (tab === 'dashboard') return 'Ringkasan Nutrisi Air';
@@ -415,7 +428,14 @@ export default function DashboardPage() {
   const handleSelectTab = (tab: 'dashboard' | 'control' | 'history') => {
     setMobileMenuOpen(false);
 
-    // Jika sistem saat ini dalam posisi MANUAL dan user berpindah ke tab lain (dashboard atau history):
+    // 1. Jika sedang berada di tab control dan ada perubahan pengaturan yang belum disimpan:
+    if (activeTab === 'control' && tab !== 'control' && isConfigDirty) {
+      setPendingTargetTab(tab);
+      setShowUnsavedAlert(true);
+      return;
+    }
+
+    // 2. Jika sistem saat ini dalam posisi MANUAL dan user berpindah ke tab lain (dashboard atau history):
     if (tab !== 'control' && isManualMode) {
       setPendingTargetTab(tab);
       setShowManualAlert(true);
@@ -423,6 +443,59 @@ export default function DashboardPage() {
     }
 
     setActiveTab(tab);
+  };
+
+  const handleCancelUnsavedAlert = () => {
+    setShowUnsavedAlert(false);
+    setPendingTargetTab(null);
+    setActiveTab('control'); // Tetap di menu kontrol pompa
+  };
+
+  const handleSaveUnsavedAndLeave = async () => {
+    if (pumpControlSaveRef.current) {
+      setIsSavingConfigFromAlert(true);
+      try {
+        const success = await pumpControlSaveRef.current();
+        if (success) {
+          setShowUnsavedAlert(false);
+          setIsConfigDirty(false);
+          if (pendingTargetTab) {
+            // Setelah simpan, jika mode masih manual dan user mau pindah ke dashboard/history:
+            if (isManualMode) {
+              setShowManualAlert(true);
+            } else {
+              setActiveTab(pendingTargetTab);
+              setPendingTargetTab(null);
+            }
+          }
+        }
+      } finally {
+        setIsSavingConfigFromAlert(false);
+      }
+    } else {
+      setShowUnsavedAlert(false);
+      setIsConfigDirty(false);
+      if (pendingTargetTab) {
+        setActiveTab(pendingTargetTab);
+        setPendingTargetTab(null);
+      }
+    }
+  };
+
+  const handleDiscardUnsavedAndLeave = () => {
+    if (pumpControlDiscardRef.current) {
+      pumpControlDiscardRef.current();
+    }
+    setShowUnsavedAlert(false);
+    setIsConfigDirty(false);
+    if (pendingTargetTab) {
+      if (isManualMode) {
+        setShowManualAlert(true);
+      } else {
+        setActiveTab(pendingTargetTab);
+        setPendingTargetTab(null);
+      }
+    }
   };
 
   const handleCancelManualAlert = () => {
@@ -472,6 +545,16 @@ export default function DashboardPage() {
         onConfirmLeave={handleConfirmLeaveManual}
         onSwitchToAutoAndLeave={handleSwitchToAutoAndLeave}
         isProcessing={isSwitchingAuto}
+      />
+
+      {/* Pop-up Alert Perubahan Pengaturan Pompa Belum Disimpan */}
+      <UnsavedChangesModal
+        isOpen={showUnsavedAlert}
+        targetTabName={getTargetTabName(pendingTargetTab)}
+        onSaveAndLeave={handleSaveUnsavedAndLeave}
+        onDiscardAndLeave={handleDiscardUnsavedAndLeave}
+        onCancel={handleCancelUnsavedAlert}
+        isSaving={isSavingConfigFromAlert}
       />
 
       {/* Pop-up Menu Navigasi (Muncul saat tombol MENU diklik, tidak memenuhi layar) */}
@@ -745,6 +828,9 @@ export default function DashboardPage() {
                 actualPumpActive={telemetry.actualPumpActive}
                 cooldownInfo={cooldown}
                 onUpdateControl={handleUpdateControl}
+                onDirtyChange={setIsConfigDirty}
+                saveRef={pumpControlSaveRef}
+                discardRef={pumpControlDiscardRef}
               />
             </div>
           )}

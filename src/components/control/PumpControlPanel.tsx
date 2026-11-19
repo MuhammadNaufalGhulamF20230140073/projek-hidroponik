@@ -38,6 +38,9 @@ interface PumpControlPanelProps {
     cooldown_max_cycles?: number;
     reset_cooldown?: boolean;
   }) => Promise<any> | void;
+  onDirtyChange?: (isDirty: boolean) => void;
+  saveRef?: React.MutableRefObject<(() => Promise<boolean>) | null>;
+  discardRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 export function PumpControlPanel({
@@ -45,6 +48,9 @@ export function PumpControlPanel({
   actualPumpActive,
   cooldownInfo,
   onUpdateControl,
+  onDirtyChange,
+  saveRef,
+  discardRef,
 }: PumpControlPanelProps) {
   const [successMsg, setSuccessMsg] = useState('');
   
@@ -56,15 +62,23 @@ export function PumpControlPanel({
   const [pendingMode, setPendingMode] = useState<'auto' | 'manual' | null>(null);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
 
-  // State lokal nilai input
+  // Status tersimpan di alat (bukan draf lokal)
+  const isSavedCooldownActive = control.cooldown_enabled !== false;
+
+  // State lokal nilai input (draf saat mengedit)
   const [ppmMin, setPpmMin] = useState<string>(String(control.target_ppm_min ?? 560));
   const [ppmMax, setPpmMax] = useState<string>(String(control.target_ppm_max ?? 840));
   const [cooldownMins, setCooldownMins] = useState<string>(String(control.cooldown_minutes ?? 60));
-  const [cooldownEnabled, setCooldownEnabled] = useState<boolean>(control.cooldown_enabled !== false);
+  const [cooldownEnabled, setCooldownEnabled] = useState<boolean>(isSavedCooldownActive);
   const [cooldownMaxCycles, setCooldownMaxCycles] = useState<string>(String(control.cooldown_max_cycles ?? 1));
 
   // Flag apakah user telah mengedit angka
   const [isDirty, setIsDirty] = useState(false);
+
+  // Kabari parent jika ada perubahan yang belum disimpan
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   useEffect(() => {
     if (!isDirty) {
@@ -109,7 +123,16 @@ export function PumpControlPanel({
     }
   };
 
-  const handleSaveConfig = async () => {
+  const handleDiscardChanges = () => {
+    setPpmMin(String(control.target_ppm_min ?? 560));
+    setPpmMax(String(control.target_ppm_max ?? 840));
+    setCooldownMins(String(control.cooldown_minutes ?? 60));
+    setCooldownEnabled(control.cooldown_enabled !== false);
+    setCooldownMaxCycles(String(control.cooldown_max_cycles ?? 1));
+    setIsDirty(false);
+  };
+
+  const handleSaveConfig = async (): Promise<boolean> => {
     const valMin = parseFloat(ppmMin);
     const valMax = parseFloat(ppmMax);
     const valCd = parseInt(cooldownMins, 10);
@@ -117,12 +140,12 @@ export function PumpControlPanel({
 
     if (Number.isNaN(valMin) || Number.isNaN(valMax) || Number.isNaN(valCd)) {
       alert('Mohon masukkan angka yang valid!');
-      return;
+      return false;
     }
 
     if (valMin >= valMax) {
       alert('Peringatan: Nilai Target Min harus lebih kecil dari Target Max!');
-      return;
+      return false;
     }
 
     setIsSavingConfig(true);
@@ -140,12 +163,28 @@ export function PumpControlPanel({
           ? `PENGATURAN DISIMPAN: COOLDOWN ${valCd}m (${valCycles}x per jeda)`
           : `PENGATURAN DISIMPAN: TANPA COOLDOWN (BEBAS ATURAN)`
       );
+      return true;
     } catch (err: any) {
       alert(`Gagal menyimpan pengaturan: ${err?.message || 'Terjadi kesalahan sistem'}`);
+      return false;
     } finally {
       setIsSavingConfig(false);
     }
   };
+
+  // Kaitkan ref agar parent (page.tsx) dapat memicu simpan atau buang perubahan saat pindah menu
+  useEffect(() => {
+    if (saveRef) {
+      saveRef.current = async () => {
+        return await handleSaveConfig();
+      };
+    }
+    if (discardRef) {
+      discardRef.current = () => {
+        handleDiscardChanges();
+      };
+    }
+  });
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -176,7 +215,7 @@ export function PumpControlPanel({
         <div className="flex flex-col items-start xs:items-end gap-1 self-start xs:self-auto shrink-0">
           {/* Indikator Realtime Sisa Waktu Cooldown & Berapa Kali Pompa Nyala (Kecil Rapi) */}
           <div className="flex flex-wrap items-center gap-1 font-mono text-[10px] font-bold">
-            {cooldownEnabled ? (
+            {isSavedCooldownActive ? (
               <>
                 <span className={`px-2 py-0.5 rounded border font-extrabold ${
                   isCdActive 
@@ -421,9 +460,9 @@ export function PumpControlPanel({
             </div>
           </div>
 
-          {/* Banner Status Otomatis & Rincian Frekuensi Pompa */}
+          {/* Banner Status Otomatis & Rincian Frekuensi Pompa (Berdasarkan Aturan Tersimpan di Alat) */}
           <div className={`rounded-xl border p-3.5 space-y-2 transition-all text-xs font-sans shadow-2xs ${
-            !control.cooldown_enabled
+            !isSavedCooldownActive
               ? 'border-sky-300 bg-sky-50/90 text-sky-950'
               : isCdActive
                 ? 'border-amber-300 bg-amber-50/95 text-amber-950'
@@ -431,7 +470,7 @@ export function PumpControlPanel({
           }`}>
             <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-1.5 border-b border-black/5 pb-2 font-mono text-[11px] font-bold">
               <div className="flex items-center gap-2">
-                {!control.cooldown_enabled ? (
+                {!isSavedCooldownActive ? (
                   <Zap className="h-4 w-4 shrink-0 text-sky-700" />
                 ) : isCdActive ? (
                   <Timer className="h-4 w-4 shrink-0 text-amber-700 animate-spin" style={{ animationDuration: '6s' }} />
@@ -439,7 +478,7 @@ export function PumpControlPanel({
                   <Zap className="h-4 w-4 shrink-0 text-emerald-700" />
                 )}
                 <span className="uppercase font-black tracking-wide">
-                  {!control.cooldown_enabled
+                  {!isSavedCooldownActive
                     ? 'STATUS: BEBAS ATURAN (TANPA COOLDOWN)'
                     : isCdActive
                       ? 'STATUS: DALAM JEDA COOLDOWN (TERKUNCI)'
@@ -451,7 +490,7 @@ export function PumpControlPanel({
                   ? 'bg-amber-100 text-amber-950 border-amber-300 font-black' 
                   : 'bg-white/80 text-zinc-800 border-zinc-200'
               }`}>
-                {cooldownEnabled 
+                {isSavedCooldownActive 
                   ? (isCdActive ? `Sisa Waktu: ${remainingTimeStr}` : 'Jeda: Siaga / Siap') 
                   : 'Tanpa Jeda Waktu'}
               </span>
@@ -459,7 +498,7 @@ export function PumpControlPanel({
 
             {/* Rincian Sangat Jelas Berapa Kali Pompa Sudah Nyala */}
             <div className="space-y-1.5 text-xs">
-              {cooldownEnabled ? (
+              {isSavedCooldownActive ? (
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 text-[11px]">
                   <div>
                     <span className="text-zinc-600 font-medium">Frekuensi Pompa: </span>
@@ -511,7 +550,7 @@ export function PumpControlPanel({
                     Target PPM &amp; Aturan Cooldown
                   </span>
                   <span className="text-[11px] text-zinc-500 font-medium block truncate">
-                    {cooldownEnabled 
+                    {isSavedCooldownActive 
                       ? `Min: ${control.target_ppm_min} • Max: ${control.target_ppm_max} PPM • Jeda: ${control.cooldown_minutes}m (${control.cooldown_max_cycles ?? 1}x)`
                       : `Min: ${control.target_ppm_min} • Max: ${control.target_ppm_max} PPM • Tanpa Cooldown`}
                   </span>
@@ -688,18 +727,29 @@ export function PumpControlPanel({
                   )}
 
                   {/* Tombol Simpan Pengaturan di Bagian Bawah Form (Mudah dijangkau di HP) */}
-                  <div className="pt-3 border-t border-zinc-200/80 flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-zinc-500 font-medium font-sans">
-                      {isDirty ? '⚠️ Ada perubahan belum disimpan' : 'Semua pengaturan tersimpan'}
-                    </span>
+                  <div className="pt-3 border-t border-zinc-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] font-medium font-sans ${isDirty ? 'text-amber-800 font-bold' : 'text-zinc-500'}`}>
+                        {isDirty ? '⚠️ Ada perubahan belum disimpan ke alat' : '✓ Semua pengaturan tersimpan'}
+                      </span>
+                      {isDirty && (
+                        <button
+                          type="button"
+                          onClick={handleDiscardChanges}
+                          className="text-[10px] text-zinc-500 hover:text-rose-600 underline cursor-pointer font-sans"
+                        >
+                          Batalkan Editan
+                        </button>
+                      )}
+                    </div>
 
                     <button
                       type="button"
                       onClick={handleSaveConfig}
                       disabled={isSavingConfig || pendingMode !== null || pendingPumpState !== null}
-                      className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold font-mono transition-all duration-200 cursor-pointer shadow-xs ${
+                      className={`flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold font-mono transition-all duration-200 cursor-pointer shadow-xs ${
                         isDirty
-                          ? 'bg-amber-600 border border-amber-700 text-white hover:bg-amber-700 ring-2 ring-amber-400/40'
+                          ? 'bg-amber-600 border border-amber-700 text-white hover:bg-amber-700 ring-2 ring-amber-400/40 font-extrabold'
                           : 'bg-emerald-700 border border-emerald-800 text-white hover:bg-emerald-800'
                       }`}
                     >
