@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { StatusBanner } from '@/components/dashboard/StatusBanner';
+import { SensorChart } from '@/components/dashboard/SensorChart';
 import { PumpControlPanel } from '@/components/control/PumpControlPanel';
 import { CalibrationInfo } from '@/components/control/CalibrationInfo';
 import { Badge } from '@/components/ui/Badge';
@@ -547,16 +548,18 @@ export default function DashboardPage() {
 
               <div className="rounded-2xl border border-zinc-300 bg-white p-4 sm:p-6 shadow-sm">
                 <div className="mb-4">
-                  <h2 className="font-mono text-xs font-black tracking-wider text-zinc-950">
+                  <h2 className="font-mono text-xs font-black tracking-wider text-zinc-950 uppercase">
                     TELEMETRY TIME-SERIES (TDS BUFFER)
                   </h2>
                   <p className="font-mono text-xs text-zinc-800 mt-0.5 font-bold">
                     Realtime Rolling Window &bull; {logs.length} Sample Points
                   </p>
                 </div>
-                <div className="h-44 sm:h-48 flex items-center justify-center border border-dashed border-zinc-300 rounded-xl bg-zinc-50 font-mono text-xs font-bold text-zinc-800 px-3 text-center">
-                  [REALTIME ROLLING WINDOW CHART ACTIVE]
-                </div>
+                <SensorChart
+                  logs={logs}
+                  targetMin={controlState.target_ppm_min}
+                  targetMax={controlState.target_ppm_max}
+                />
               </div>
             </>
           )}
