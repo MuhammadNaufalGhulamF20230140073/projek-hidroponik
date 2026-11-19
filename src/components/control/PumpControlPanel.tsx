@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SystemControl } from '@/lib/types/hidroponik';
-import { Zap, Check, Save, Power, Timer, ShieldCheck } from 'lucide-react';
+import { Zap, Check, Save, Power, Timer, AlertCircle } from 'lucide-react';
 
 interface CooldownInfo {
   is_in_cooldown: boolean;
@@ -20,7 +20,7 @@ interface PumpControlPanelProps {
     target_ppm_min?: number;
     target_ppm_max?: number;
     cooldown_minutes?: number;
-  }) => void;
+  }) => Promise<void> | void;
 }
 
 export function PumpControlPanel({
@@ -32,23 +32,26 @@ export function PumpControlPanel({
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Buffer input lokal agar user bisa mengetik/menghapus angka dengan leluasa tanpa langsung terkirim separuh
-  const [ppmMin, setPpmMin] = useState<string>(String(control.target_ppm_min || 560));
-  const [ppmMax, setPpmMax] = useState<string>(String(control.target_ppm_max || 840));
-  const [cooldownMins, setCooldownMins] = useState<string>(String(control.cooldown_minutes || 60));
-  const [isUserEditing, setIsUserEditing] = useState(false);
+  // State lokal nilai input
+  const [ppmMin, setPpmMin] = useState<string>(String(control.target_ppm_min ?? 560));
+  const [ppmMax, setPpmMax] = useState<string>(String(control.target_ppm_max ?? 840));
+  const [cooldownMins, setCooldownMins] = useState<string>(String(control.cooldown_minutes ?? 60));
 
+  // Flag apakah user telah mengedit angka (jika true, polling background DILARANG menimpa!)
+  const [isDirty, setIsDirty] = useState(false);
+
+  // Sinkronkan dari server HANYA saat pertama kali atau saat user TIDAK sedang memiliki draft editan
   useEffect(() => {
-    if (!isUserEditing) {
+    if (!isDirty) {
       if (control.target_ppm_min !== undefined) setPpmMin(String(control.target_ppm_min));
       if (control.target_ppm_max !== undefined) setPpmMax(String(control.target_ppm_max));
       if (control.cooldown_minutes !== undefined) setCooldownMins(String(control.cooldown_minutes));
     }
-  }, [control, isUserEditing]);
+  }, [control.target_ppm_min, control.target_ppm_max, control.cooldown_minutes, isDirty]);
 
   const showNotification = (msg: string) => {
     setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(''), 3000);
+    setTimeout(() => setSuccessMsg(''), 3500);
   };
 
   const isManual = control.pump_mode === 'manual';
@@ -69,16 +72,21 @@ export function PumpControlPanel({
     setLoading(true);
     try {
       await onUpdateControl({ mode: 'manual', state: newState });
-      showNotification(`SAKLAR: POMPA ${newState ? 'DINYALAKAN (ON)' : 'DIMATIKAN (OFF)'}`);
+      showNotification(`SAKLAR MANUAL: POMPA ${newState ? 'DINYALAKAN (ON)' : 'DIMATIKAN (OFF)'}`);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSaveConfig = async () => {
-    const valMin = parseFloat(ppmMin) || 560;
-    const valMax = parseFloat(ppmMax) || 840;
-    const valCd = parseInt(cooldownMins, 10) || 60;
+    const valMin = parseFloat(ppmMin);
+    const valMax = parseFloat(ppmMax);
+    const valCd = parseInt(cooldownMins, 10);
+
+    if (Number.isNaN(valMin) || Number.isNaN(valMax) || Number.isNaN(valCd)) {
+      alert('Mohon masukkan angka yang valid!');
+      return;
+    }
 
     if (valMin >= valMax) {
       alert('Peringatan: Nilai Batas Minimum harus lebih kecil dari Batas Target Maksimum!');
@@ -92,17 +100,24 @@ export function PumpControlPanel({
         target_ppm_max: valMax,
         cooldown_minutes: valCd,
       });
-      setIsUserEditing(false);
-      showNotification(`KONFIGURASI TERSIMPAN: ${valMin}-${valMax} PPM | JEDA: ${valCd}m`);
+      setIsDirty(false); // Reset status dirty setelah sukses disimpan
+      showNotification(`KONFIGURASI TERSIMPAN: MIN ${valMin} PPM \u2022 MAX ${valMax} PPM \u2022 JEDA ${valCd}m`);
     } finally {
       setLoading(false);
     }
   };
 
   const applyPreset = (min: number, max: number) => {
-    setIsUserEditing(true);
     setPpmMin(String(min));
     setPpmMax(String(max));
+    setIsDirty(true);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveConfig();
+    }
   };
 
   const isInCooldown = Boolean(cooldownInfo?.is_in_cooldown);
@@ -164,13 +179,13 @@ export function PumpControlPanel({
           <span>
             {isInCooldown && control.pump_mode === 'auto'
               ? `JEDA COOLDOWN NUTRISI AKTIF (Tersisa: ${remainingTimeStr})`
-              : `SISTEM SIAP MEMOMPA SECARA OTOMATIS \u2022 Pompa menyala saat PPM < ${control.target_ppm_min}`}
+              : `SISTEM OTOMATIS SIAP \u2022 Pompa ON jika PPM < ${control.target_ppm_min} \u2022 Cutoff OFF di ${control.target_ppm_max} PPM`}
           </span>
         </div>
         <span className="hidden sm:inline text-[11px] font-semibold text-zinc-600">
           {isInCooldown && control.pump_mode === 'auto'
             ? 'Proteksi overdosis tanaman'
-            : 'Mati saat PPM >= target'}
+            : 'Mati & Cooldown saat cap tercapai'}
         </span>
       </div>
 
@@ -270,9 +285,17 @@ export function PumpControlPanel({
       <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-4 font-mono">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-zinc-200 pb-3">
           <div>
-            <span className="text-[10px] font-extrabold text-zinc-700 uppercase tracking-wider block">
-              SETPOINTS &amp; REST WINDOW PARAMETERS
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-extrabold text-zinc-700 uppercase tracking-wider block">
+                SETPOINTS &amp; REST WINDOW PARAMETERS
+              </span>
+              {isDirty && (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded border border-amber-300 animate-pulse">
+                  <AlertCircle className="h-3 w-3" />
+                  Ada Perubahan Belum Disimpan
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-xs text-zinc-600 font-semibold">Preset Cepat:</span>
               <button
@@ -295,25 +318,29 @@ export function PumpControlPanel({
             type="button"
             onClick={handleSaveConfig}
             disabled={loading}
-            className="flex items-center gap-1.5 self-start sm:self-auto rounded-lg bg-emerald-700 border border-emerald-800 px-3 py-1.5 text-xs font-black text-white hover:bg-emerald-800 transition cursor-pointer shadow-xs"
+            className={`flex items-center gap-1.5 self-start sm:self-auto rounded-lg px-3.5 py-1.5 text-xs font-black transition cursor-pointer shadow-xs ${
+              isDirty
+                ? 'bg-amber-600 border border-amber-700 text-white hover:bg-amber-700 ring-2 ring-amber-400/40'
+                : 'bg-emerald-700 border border-emerald-800 text-white hover:bg-emerald-800'
+            }`}
           >
             <Save className="h-3.5 w-3.5" />
-            SIMPAN CONFIG
+            {isDirty ? 'SIMPAN PERUBAHAN' : 'SIMPAN CONFIG'}
           </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-zinc-800 uppercase block">Min Threshold (Trigger ON)</label>
-            <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs">
+            <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
               <input
                 type="number"
                 value={ppmMin}
-                onFocus={() => setIsUserEditing(true)}
                 onChange={(e) => {
-                  setIsUserEditing(true);
                   setPpmMin(e.target.value);
+                  setIsDirty(true);
                 }}
+                onKeyDown={handleKeyDown}
                 className="w-full bg-transparent text-sm font-bold text-zinc-950 focus:outline-none"
                 placeholder="560"
               />
@@ -324,15 +351,15 @@ export function PumpControlPanel({
 
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-zinc-800 uppercase block">Target Cap (Cutoff OFF)</label>
-            <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs">
+            <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
               <input
                 type="number"
                 value={ppmMax}
-                onFocus={() => setIsUserEditing(true)}
                 onChange={(e) => {
-                  setIsUserEditing(true);
                   setPpmMax(e.target.value);
+                  setIsDirty(true);
                 }}
+                onKeyDown={handleKeyDown}
                 className="w-full bg-transparent text-sm font-bold text-zinc-950 focus:outline-none"
                 placeholder="840"
               />
@@ -343,15 +370,15 @@ export function PumpControlPanel({
 
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-zinc-800 uppercase block">Cooldown Window</label>
-            <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs">
+            <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
               <input
                 type="number"
                 value={cooldownMins}
-                onFocus={() => setIsUserEditing(true)}
                 onChange={(e) => {
-                  setIsUserEditing(true);
                   setCooldownMins(e.target.value);
+                  setIsDirty(true);
                 }}
+                onKeyDown={handleKeyDown}
                 className="w-full bg-transparent text-sm font-bold text-zinc-950 focus:outline-none"
                 placeholder="60"
               />

@@ -168,8 +168,7 @@ void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmSta
         float val = response.substring(startIdx, endIdx).toFloat();
         if (val > 0) {
           if (val != targetPpmMin) {
-            Serial.printf("[CONFIG] Ambang Target Berubah: %.0f -> %.0f PPM\n", targetPpmMin, val);
-            waktuSelesaiDosing = 0; // Reset jeda jika user sengaja mengubah ambang batas
+            Serial.printf("[CONFIG] Ambang Min Berubah: %.0f -> %.0f PPM\n", targetPpmMin, val);
           }
           targetPpmMin = val;
         }
@@ -183,7 +182,12 @@ void kirimDataKeVercel(int adcRaw, float teganganRaw, float ppmRaw, float ppmSta
       if (endIdx == -1) endIdx = response.indexOf("}", startIdx);
       if (endIdx != -1) {
         float val = response.substring(startIdx, endIdx).toFloat();
-        if (val > 0) targetPpmMax = val;
+        if (val > 0) {
+          if (val != targetPpmMax) {
+            Serial.printf("[CONFIG] Ambang Max Berubah: %.0f -> %.0f PPM\n", targetPpmMax, val);
+          }
+          targetPpmMax = val;
+        }
       }
     }
 
@@ -290,31 +294,61 @@ void loop() {
     ppmFiltered = (EMA_ALPHA * ppmAverage) + ((1.0 - EMA_ALPHA) * ppmFiltered);
   }
 
-  // 7. KONTROL POMPA NUTRISI OTOMATIS:
+  // 7. KONTROL POMPA NUTRISI OTOMATIS (SEIRAS, KONSISTEN & HISTERESIS JELAS):
   if (modeOperasi == "auto") {
     unsigned long cooldownMs = (unsigned long)cooldownMinutes * 60UL * 1000UL;
     unsigned long sekarangMs = millis();
-    bool masihCooldown = (waktuSelesaiDosing > 0) && (sekarangMs - waktuSelesaiDosing < cooldownMs);
+    bool masihCooldown = (cooldownMinutes > 0) && (waktuSelesaiDosing > 0) && (sekarangMs - waktuSelesaiDosing < cooldownMs);
 
-    // KONDISI A: PPM di bawah target ambang batas -> Pompa MENYALA (ON)
-    if (ppmFiltered < targetPpmMin) {
-      if (!masihCooldown) {
-        if (!pompaAktif) {
-          Serial.printf("[AUTO] PPM (%.1f) < Target (%.1f) -> Nyalakan Pompa (ON)!\n", ppmFiltered, targetPpmMin);
-          kontrolPompa(true);
-        }
-      } else {
-        // Jika sedang cooldown, pastikan pompa tetap mati demi keselamatan tanaman
-        if (pompaAktif) kontrolPompa(false);
-      }
+    // Jika waktu cooldown sudah berlalu, bersihkan timer
+    if (waktuSelesaiDosing > 0 && !masihCooldown) {
+      waktuSelesaiDosing = 0;
     }
-    // KONDISI B: PPM sudah mencapai atau melebihi target (nutrisi cukup / config diturunkan) -> Pompa MATI (OFF)
-    else {
+
+    // 1. JIKA SEDANG MASA COOLDOWN: Pompa WAJIB MATI demi keamanan tanaman
+    if (masihCooldown) {
       if (pompaAktif) {
-        Serial.printf("[AUTO] PPM (%.1f) >= Target (%.1f) -> Target Terpenuhi / Config Berubah! Matikan Pompa (OFF) & Mulai Jeda!\n", ppmFiltered, targetPpmMin);
         kontrolPompa(false);
-        waktuSelesaiDosing = millis();
-        laporanDosingSelesai = true; // Laporkan selesai dosing ke Vercel
+      }
+      sedangDosing = false;
+    }
+    // 2. JIKA TIDAK COOLDOWN:
+    else {
+      // Skenario A: PPM sudah mencapai atau melebihi Batas Cap Maksimal (Target Tercapai Penuh)
+      if (ppmFiltered >= targetPpmMax) {
+        if (pompaAktif || sedangDosing) {
+          Serial.printf("[AUTO] Target Max Tercapai (%.1f >= %.1f). Pompa MATI & Masuk Cooldown %d menit!\n", 
+                        ppmFiltered, targetPpmMax, cooldownMinutes);
+          kontrolPompa(false);
+          sedangDosing = false;
+          waktuSelesaiDosing = millis(); // Mulai Cooldown resmi karena nutrisi sudah optimal!
+          laporanDosingSelesai = true;
+        }
+      }
+      // Skenario B: PPM di bawah Batas Minimum (Kurang Nutrisi -> Harus Nyala)
+      else if (ppmFiltered < targetPpmMin) {
+        if (!pompaAktif) {
+          Serial.printf("[AUTO] PPM (%.1f) < Min (%.1f). Pompa MENYALA (ON) menuju Target %.1f!\n", 
+                        ppmFiltered, targetPpmMin, targetPpmMax);
+          kontrolPompa(true);
+          sedangDosing = true;
+        }
+      }
+      // Skenario C: PPM di antara Min dan Max (Zona Aman / Transisi)
+      else {
+        // Jika sedang dalam siklus memompa dari bawah, lanjutkan memompa sampai menyentuh targetPpmMax
+        if (sedangDosing) {
+          if (!pompaAktif) {
+            kontrolPompa(true);
+          }
+        } else {
+          // Jika tidak sedang dosing (misal air sudah aman atau batas diturunkan), pompa standby MATI
+          if (pompaAktif) {
+            Serial.printf("[AUTO] PPM (%.1f) >= Min (%.1f). Pompa Standby MATI.\n", 
+                          ppmFiltered, targetPpmMin);
+            kontrolPompa(false);
+          }
+        }
       }
     }
   }

@@ -29,8 +29,8 @@ export async function POST(req: Request) {
     const target_ppm_min = body.target_ppm_min !== undefined ? Number(body.target_ppm_min) : undefined;
     const target_ppm_max = body.target_ppm_max !== undefined ? Number(body.target_ppm_max) : undefined;
     const cooldown_minutes = body.cooldown_minutes !== undefined ? Number(body.cooldown_minutes) : undefined;
-    // Reset cooldown agar sistem langsung siap memompa seketika saat config/mode diubah
-    const reset_cooldown = Boolean(body.reset_cooldown || (target_ppm_min !== undefined) || (mode === 'auto'));
+    // Cooldown TETAP berjalan dan tidak di-reset otomatis saat ubah angka/mode
+    const reset_cooldown = Boolean(body.reset_cooldown);
 
     const updated = await updatePumpControl({
       mode,
