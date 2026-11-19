@@ -176,17 +176,17 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
           {/* Ambang Batas Target yang Sesuai Konfigurasi User */}
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-300 text-[10px] font-black">
-              TARGET MIN: {numTargetMin} PPM
+              BATAS BAWAH: {numTargetMin} PPM
             </span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-orange-50 text-orange-900 border border-orange-300 text-[10px] font-black">
-              TARGET MAX: {numTargetMax} PPM
+              BATAS ATAS: {numTargetMax} PPM
             </span>
           </div>
 
           <div className="hidden lg:flex items-center gap-1 text-[11px] text-zinc-500 font-medium">
-            <span>Buffer:</span>
+            <span>Rentang:</span>
             <span className="font-bold text-zinc-800">{stats.min.toFixed(0)} - {stats.max.toFixed(0)} PPM</span>
-            <span>(Avg: {stats.avg.toFixed(0)})</span>
+            <span>(Rata-rata: {stats.avg.toFixed(0)} PPM)</span>
           </div>
         </div>
 
@@ -194,15 +194,15 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 text-[10px] font-bold">
           <span className="flex items-center gap-1 text-emerald-800">
             <span className="h-2 w-3.5 rounded-xs bg-emerald-600 inline-block" />
-            PPM Stabil
+            Nutrisi Stabil
           </span>
           <span className="flex items-center gap-1 text-zinc-500">
             <span className="h-0.5 w-3 border-b-2 border-dashed border-zinc-400 inline-block" />
-            PPM Raw
+            Data Mentah
           </span>
           <span className="flex items-center gap-1 text-blue-700">
             <span className="h-2 w-2 rounded-full bg-blue-600 inline-block ring-1 ring-blue-300" />
-            Pompa ON
+            Pompa Nyala
           </span>
         </div>
       </div>
@@ -212,8 +212,8 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
         {data.length === 0 ? (
           <div className="h-44 sm:h-48 flex flex-col items-center justify-center gap-2 text-zinc-500 text-xs font-bold text-center">
             <Activity className="h-8 w-8 text-zinc-400 animate-pulse" />
-            <p>Menunggu data telemetri pertama dari ESP32...</p>
-            <span className="text-[10px] text-zinc-400">Grafik time-series akan ter-render secara otomatis</span>
+            <p>Menunggu kiriman data pertama dari alat sensor...</p>
+            <span className="text-[10px] text-zinc-400">Grafik akan tampil otomatis begitu alat menyala</span>
           </div>
         ) : (
           <>
@@ -280,7 +280,7 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
                   <rect
                     x={padLeft + 8}
                     y={getY(numTargetMin) - 9}
-                    width="104"
+                    width="128"
                     height="18"
                     rx="4"
                     fill="#fef3c7"
@@ -288,14 +288,14 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
                     strokeWidth="1"
                   />
                   <text
-                    x={padLeft + 60}
+                    x={padLeft + 72}
                     y={getY(numTargetMin) + 3.5}
                     textAnchor="middle"
                     fill="#92400e"
                     fontSize="9"
                     fontWeight="bold"
                   >
-                    MIN: {numTargetMin} PPM (ON)
+                    BATAS BAWAH: {numTargetMin} PPM
                   </text>
                 </g>
               )}
@@ -314,7 +314,7 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
                   <rect
                     x={padLeft + 8}
                     y={getY(numTargetMax) - 9}
-                    width="110"
+                    width="124"
                     height="18"
                     rx="4"
                     fill="#ffedd5"
@@ -322,14 +322,14 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
                     strokeWidth="1"
                   />
                   <text
-                    x={padLeft + 63}
+                    x={padLeft + 70}
                     y={getY(numTargetMax) + 3.5}
                     textAnchor="middle"
                     fill="#9a3412"
                     fontSize="9"
                     fontWeight="bold"
                   >
-                    MAX: {numTargetMax} PPM (OFF)
+                    BATAS ATAS: {numTargetMax} PPM
                   </text>
                 </g>
               )}
@@ -450,27 +450,27 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
                   <span>{activeHover.item.timestamp}</span>
                 </div>
                 <div className="flex justify-between items-center pt-0.5">
-                  <span className="text-zinc-600 font-bold">PPM Stabil:</span>
+                  <span className="text-zinc-600 font-bold">Nutrisi Stabil:</span>
                   <span className="font-black text-emerald-700">{activeHover.item.ppm_filtered.toFixed(1)} ppm</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-zinc-500">PPM Raw:</span>
+                  <span className="text-zinc-500">Data Mentah:</span>
                   <span className="font-bold text-zinc-700">{activeHover.item.ppm_raw.toFixed(1)} ppm</span>
                 </div>
                 {activeHover.item.voltage && (
                   <div className="flex justify-between items-center text-[10px]">
-                    <span className="text-zinc-500">Voltase:</span>
+                    <span className="text-zinc-500">Tegangan:</span>
                     <span className="font-bold text-zinc-700">{activeHover.item.voltage}</span>
                   </div>
                 )}
                 <div className="flex justify-between items-center pt-1 border-t border-zinc-100">
-                  <span className="text-zinc-500 text-[10px]">Status Pompa:</span>
+                  <span className="text-zinc-500 text-[10px]">Kondisi Pompa:</span>
                   <span className={`text-[10px] font-black px-1.5 py-0.2 rounded ${
                     activeHover.item.is_active
                       ? 'bg-blue-100 text-blue-900 border border-blue-300'
                       : 'bg-zinc-100 text-zinc-700'
                   }`}>
-                    {activeHover.item.is_active ? 'ON (MENYALA)' : 'OFF (MATI)'}
+                    {activeHover.item.is_active ? 'MENYALA' : 'MATI'}
                   </span>
                 </div>
               </div>

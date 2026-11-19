@@ -422,7 +422,7 @@ export default function DashboardPage() {
                 </h1>
               </div>
               <p className="text-[11px] sm:text-xs font-semibold text-zinc-800 mt-0.5 truncate">
-                ESP32 ADC GPIO 34 (TDS) &bull; GPIO 23 (Relay) &bull; Vercel Postgres
+                Sistem Pemantauan Otomatis Kadar Nutrisi &amp; Pompa Air
               </p>
             </div>
           </div>
@@ -430,14 +430,14 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <div className="hidden lg:flex flex-col items-end font-mono text-[10px] font-bold text-zinc-700">
               <span>
-                LAST SEEN:{' '}
+                UPDATE:{' '}
                 <strong className="text-zinc-950">
-                  {telemetry.lastSeenSeconds < 9999 ? `${telemetry.lastSeenSeconds}s ago` : 'NO DATA'}
+                  {telemetry.lastSeenSeconds < 9999 ? `${telemetry.lastSeenSeconds}s lalu` : 'BELUM ADA DATA'}
                 </strong>
               </span>
               {cooldown.is_in_cooldown && (
                 <span className="text-amber-800">
-                  COOLDOWN: {Math.floor(cooldown.remaining_seconds / 60)}m {(cooldown.remaining_seconds % 60).toString().padStart(2, '0')}s
+                  JEDA POMPA: {Math.floor(cooldown.remaining_seconds / 60)}m {(cooldown.remaining_seconds % 60).toString().padStart(2, '0')}s
                 </span>
               )}
             </div>
@@ -447,7 +447,7 @@ export default function DashboardPage() {
               dot
               className="font-mono text-[10px] sm:text-xs font-bold"
             >
-              {telemetry.isOnline ? 'ESP32 ONLINE' : 'ESP32 OFFLINE'}
+              {telemetry.isOnline ? 'ALAT TERHUBUNG' : 'ALAT TERPUTUS'}
             </Badge>
 
             <button
@@ -457,7 +457,7 @@ export default function DashboardPage() {
               className="flex items-center gap-1.5 rounded-lg border border-zinc-400 bg-white px-2.5 sm:px-3.5 py-1.5 text-xs font-bold text-zinc-900 shadow-xs hover:bg-zinc-50 disabled:opacity-60 transition-all cursor-pointer"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+              <span className="hidden sm:inline">{isRefreshing ? 'Memuat...' : 'Perbarui'}</span>
             </button>
           </div>
         </header>
@@ -476,10 +476,11 @@ export default function DashboardPage() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                {/* Kartu 1: Kadar Nutrisi Air */}
                 <div className="rounded-2xl border border-zinc-300 bg-white p-4 sm:p-6 shadow-sm hover:shadow-md transition">
                   <div className="flex items-center justify-between gap-2 mb-4 border-b border-zinc-200 pb-3">
                     <span className="font-mono text-[11px] sm:text-xs font-black tracking-wider text-zinc-900">
-                      NUTRIENT CONCENTRATION (TDS)
+                      KADAR NUTRISI AIR (TDS)
                     </span>
                     <span className={`shrink-0 rounded px-2 py-0.5 font-mono text-[10px] font-bold border transition-colors duration-300 ${
                       (controlState.pump_mode === 'manual' ? Boolean(controlState.pump_state) : telemetry.actualPumpActive)
@@ -487,8 +488,8 @@ export default function DashboardPage() {
                         : 'bg-zinc-100 text-zinc-800 border-zinc-300'
                     }`}>
                       {(controlState.pump_mode === 'manual' ? Boolean(controlState.pump_state) : telemetry.actualPumpActive)
-                        ? 'PUMP ACTIVE'
-                        : 'RELAY STANDBY'}
+                        ? 'POMPA MENYALA'
+                        : 'POMPA STANDBY'}
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between gap-2">
@@ -499,28 +500,29 @@ export default function DashboardPage() {
                       <span className="ml-2 font-mono text-xs sm:text-sm font-bold text-zinc-800">PPM</span>
                     </div>
                     <div className="text-right font-mono text-xs">
-                      <span className="text-zinc-700 block font-bold">RAW DELTA</span>
-                      <span className="font-extrabold text-amber-800">{rawDelta} ppm</span>
+                      <span className="text-zinc-700 block font-bold">DATA MENTAH</span>
+                      <span className="font-extrabold text-amber-800">{telemetry.ppmRaw.toFixed(1)} ppm</span>
                     </div>
                   </div>
                   <div className="mt-4 pt-4 border-t border-zinc-200 flex flex-col sm:flex-row sm:justify-between gap-1 font-mono text-xs text-zinc-900 font-bold">
                     <span>
-                      UNFILTERED ADC READ: <strong className="text-zinc-950">{telemetry.ppmRaw.toFixed(1)} ppm</strong>
+                      STATUS BACAAN: <strong className="text-emerald-700">Stabil (Tersaring)</strong>
                     </span>
                     <span>
-                      SMOOTHING FACTOR: <strong className="text-zinc-950">&alpha; = 0.20</strong>
+                      SELISIH FILTER: <strong className="text-zinc-950">{rawDelta} ppm</strong>
                     </span>
                   </div>
                 </div>
 
+                {/* Kartu 2: Sinyal Listrik Sensor & Suhu Air */}
                 <div className="rounded-2xl border border-zinc-300 bg-white p-4 sm:p-6 shadow-sm hover:shadow-md transition">
                   <div className="flex items-center justify-between gap-2 mb-4 border-b border-zinc-200 pb-3">
                     <span className="font-mono text-[11px] sm:text-xs font-black tracking-wider text-zinc-900 flex items-center gap-1.5">
                       <Cpu className="h-4 w-4 shrink-0 text-sky-800" />
-                      ANALOG-TO-DIGITAL CONVERSION (ADC)
+                      SINYAL LISTRIK SENSOR &amp; SUHU
                     </span>
-                    <span className="shrink-0 rounded bg-zinc-200 px-2 py-0.5 font-mono text-[10px] font-bold text-zinc-900 border border-zinc-300">
-                      12-BIT (4096 LSB)
+                    <span className="shrink-0 rounded bg-emerald-100 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-900 border border-emerald-300">
+                      SENSOR AKTIF
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between gap-2">
@@ -528,31 +530,32 @@ export default function DashboardPage() {
                       <span className="font-mono text-4xl sm:text-5xl font-black text-zinc-950">
                         {telemetry.voltage.toFixed(3)}
                       </span>
-                      <span className="ml-2 font-mono text-xs sm:text-sm font-bold text-zinc-800">VOLTS (DC)</span>
+                      <span className="ml-2 font-mono text-xs sm:text-sm font-bold text-zinc-800">VOLT</span>
                     </div>
                     <div className="text-right font-mono text-xs">
-                      <span className="text-zinc-700 block font-bold">BIT DENSITY</span>
+                      <span className="text-zinc-700 block font-bold">BACAAN SENSOR</span>
                       <span className="font-extrabold text-zinc-950">{telemetry.adcRaw} / 4095</span>
                     </div>
                   </div>
                   <div className="mt-4 pt-4 border-t border-zinc-200 flex flex-col sm:flex-row sm:justify-between gap-1 font-mono text-xs text-zinc-900 font-bold">
                     <span>
-                      TEMP REF: <strong className="text-zinc-950">{telemetry.temperature.toFixed(1)} &deg;C</strong>
+                      SUHU AIR ACUAN: <strong className="text-zinc-950">{telemetry.temperature.toFixed(1)} &deg;C</strong>
                     </span>
                     <span>
-                      QUANTIZATION: <strong className="text-zinc-950">~0.806 mV/LSB</strong>
+                      KONDISI LISTRIK: <strong className="text-emerald-700">Normal &amp; Terkalibrasi</strong>
                     </span>
                   </div>
                 </div>
               </div>
 
+              {/* Kartu 3: Grafik Perjalanan Nutrisi Air */}
               <div className="rounded-2xl border border-zinc-300 bg-white p-4 sm:p-6 shadow-sm">
                 <div className="mb-4">
                   <h2 className="font-mono text-xs font-black tracking-wider text-zinc-950 uppercase">
-                    TELEMETRY TIME-SERIES (TDS BUFFER)
+                    GRAFIK PERJALANAN NUTRISI AIR
                   </h2>
                   <p className="font-mono text-xs text-zinc-800 mt-0.5 font-bold">
-                    Realtime Rolling Window &bull; {logs.length} Sample Points
+                    Riwayat pergerakan nutrisi &bull; {logs.length} data pemantauan terakhir
                   </p>
                 </div>
                 <SensorChart
@@ -564,7 +567,7 @@ export default function DashboardPage() {
             </>
           )}
 
-          {/* TAB 2: ACTUATOR & DOSING ENGINE */}
+          {/* TAB 2: PENGATURAN & SAKLAR POMPA */}
           {activeTab === 'control' && (
             <div className="space-y-5 sm:space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
@@ -577,25 +580,25 @@ export default function DashboardPage() {
 
                 <div className="rounded-2xl border border-zinc-300 bg-white p-4 sm:p-6 shadow-sm space-y-4">
                   <div className="border-b border-zinc-200 pb-3">
-                    <h2 className="font-mono text-xs font-black tracking-wider text-zinc-950 flex items-center gap-1.5">
+                    <h2 className="font-mono text-xs font-black tracking-wider text-zinc-950 flex items-center gap-1.5 uppercase">
                       <Sliders className="h-4 w-4 shrink-0 text-emerald-800" />
-                      DOSING ENGINE PARAMETERS &amp; SETPOINTS
+                      ATURAN PENYIRAMAN &amp; AMBANG BATAS
                     </h2>
                     <p className="font-mono text-xs text-zinc-800 mt-0.5 font-bold">
-                      Configured relay trigger thresholds &amp; cooldown timers
+                      Aturan batas penyiraman otomatis dan jeda istirahat pompa
                     </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 sm:gap-4 font-mono">
                     <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4">
-                      <span className="text-[10px] font-black text-zinc-800 uppercase">Min Threshold (ON)</span>
+                      <span className="text-[10px] font-black text-zinc-800 uppercase">Batas Bawah (Pompa ON)</span>
                       <div className="text-lg sm:text-xl font-black text-zinc-950 mt-1">
                         {controlState.target_ppm_min}{' '}
                         <span className="text-xs font-bold text-zinc-800">PPM</span>
                       </div>
                     </div>
                     <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4">
-                      <span className="text-[10px] font-black text-zinc-800 uppercase">Target Cap (OFF)</span>
+                      <span className="text-[10px] font-black text-zinc-800 uppercase">Batas Atas Target (Pompa OFF)</span>
                       <div className="text-lg sm:text-xl font-black text-zinc-950 mt-1">
                         {controlState.target_ppm_max}{' '}
                         <span className="text-xs font-bold text-zinc-800">PPM</span>
@@ -604,13 +607,13 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 font-mono">
-                    <span className="text-[10px] font-black text-zinc-800 uppercase">Cooldown Window</span>
+                    <span className="text-[10px] font-black text-zinc-800 uppercase">Jeda Istirahat Pompa</span>
                     <div className="text-base sm:text-lg font-black text-zinc-950 mt-0.5">
-                      {controlState.cooldown_minutes} Minutes{' '}
+                      {controlState.cooldown_minutes} Menit{' '}
                       <span className="text-xs font-bold text-zinc-800">
                         {cooldown.is_in_cooldown
                           ? `(\u2022 Sisa ${Math.floor(cooldown.remaining_seconds / 60)}m ${(cooldown.remaining_seconds % 60).toString().padStart(2, '0')}s)`
-                          : '(\u2022 Max 1x cycle per duration)'}
+                          : '(\u2022 Maksimal 1x siklus per durasi)'}
                       </span>
                     </div>
                   </div>
@@ -629,10 +632,10 @@ export default function DashboardPage() {
                   <div>
                     <h2 className="text-xs font-bold tracking-wider text-white flex items-center gap-2">
                       <Database className="h-4 w-4 shrink-0 text-emerald-400" />
-                      DATABASE STORAGE CONNECTOR
+                      STATUS PENYIMPANAN DATABASE
                     </h2>
                     <p className="text-xs text-zinc-300 mt-0.5 font-semibold">
-                      Vercel Postgres (Neon Serverless Pool)
+                      Pusat Rekam Riwayat Data Sensor Hidroponik (Cloud Database)
                     </p>
                   </div>
                   <button
@@ -640,12 +643,12 @@ export default function DashboardPage() {
                     disabled={isInitializingDb}
                     className="self-start sm:self-auto rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-bold text-zinc-100 hover:bg-zinc-700 disabled:opacity-60 transition cursor-pointer"
                   >
-                    {isInitializingDb ? 'INITIALIZING...' : 'INIT SCHEMA'}
+                    {isInitializingDb ? 'MEMPROSES...' : 'PERIKSA TABEL'}
                   </button>
                 </div>
                 <p className="text-xs text-zinc-300 border-t border-zinc-800/80 pt-3 font-semibold">
-                  Schema Tables: <span className="text-emerald-400 font-bold">sensor_logs</span> &bull;{' '}
-                  <span className="text-emerald-400 font-bold">system_control</span>.
+                  Tabel Tersedia: <span className="text-emerald-400 font-bold">sensor_logs (Riwayat)</span> &bull;{' '}
+                  <span className="text-emerald-400 font-bold">system_control (Aturan Kontrol)</span>.
                 </p>
                 {dbInitMessage && (
                   <p className="text-xs text-emerald-300 mt-2 font-semibold">
@@ -656,9 +659,9 @@ export default function DashboardPage() {
 
               <div className="rounded-2xl border border-zinc-800 bg-[#121418] p-4 sm:p-6 text-zinc-100 shadow-lg">
                 <div className="mb-4">
-                  <h2 className="text-xs font-bold tracking-wider text-white">TELEMETRY ARCHIVE (POSTGRES LOGS)</h2>
+                  <h2 className="text-xs font-bold tracking-wider text-white uppercase">RIWAYAT REKAM DATA SENSOR &amp; POMPA</h2>
                   <p className="text-xs text-zinc-300 mt-0.5 font-semibold">
-                    Chronological audit trail of all sensor transmissions &bull; Newest first
+                    Catatan riwayat kondisi nutrisi dan pompa (data terbaru di atas)
                   </p>
                 </div>
 
@@ -666,13 +669,13 @@ export default function DashboardPage() {
                   <table className="w-full min-w-160 text-left text-xs">
                     <thead className="sticky top-0 bg-[#121418] border-b border-zinc-800 text-zinc-300 font-bold">
                       <tr>
-                        <th className="p-3 whitespace-nowrap">PACKET_ID</th>
-                        <th className="p-3 whitespace-nowrap">TIMESTAMP</th>
-                        <th className="p-3 whitespace-nowrap">ADC_RAW</th>
-                        <th className="p-3 whitespace-nowrap">VOLTAGE</th>
-                        <th className="p-3 whitespace-nowrap">PPM_RAW</th>
-                        <th className="p-3 whitespace-nowrap">PPM_FILTERED</th>
-                        <th className="p-3 whitespace-nowrap">RELAY</th>
+                        <th className="p-3 whitespace-nowrap">NO</th>
+                        <th className="p-3 whitespace-nowrap">WAKTU</th>
+                        <th className="p-3 whitespace-nowrap">BACAAN SENSOR</th>
+                        <th className="p-3 whitespace-nowrap">TEGANGAN</th>
+                        <th className="p-3 whitespace-nowrap">PPM MENTAH</th>
+                        <th className="p-3 whitespace-nowrap">PPM STABIL</th>
+                        <th className="p-3 whitespace-nowrap">STATUS POMPA</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-900 text-zinc-100 font-bold">
@@ -719,7 +722,7 @@ export default function DashboardPage() {
           }`}
         >
           <Activity className="h-4 w-4" />
-          <span>TELEMETRY</span>
+          <span>NUTRISI</span>
         </button>
 
         <button
@@ -729,7 +732,7 @@ export default function DashboardPage() {
           }`}
         >
           <Sliders className="h-4 w-4" />
-          <span>CONTROL</span>
+          <span>KONTROL</span>
         </button>
 
         <button
@@ -739,7 +742,7 @@ export default function DashboardPage() {
           }`}
         >
           <History className="h-4 w-4" />
-          <span>LOGS</span>
+          <span>RIWAYAT</span>
         </button>
       </nav>
     </div>

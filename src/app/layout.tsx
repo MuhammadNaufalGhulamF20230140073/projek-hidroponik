@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Smart Hydroponic IoT Center | Capstone",
-  description: "Sistem Monitoring TDS & Kontrol Pompa Hidroponik Berbasis IoT",
+  title: "Bagas Hidroponik - Pemantauan Nutrisi & Pompa Otomatis",
+  description: "Sistem Pemantauan Kadar Nutrisi (TDS) dan Kontrol Pompa Hidroponik Berbasis IoT",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

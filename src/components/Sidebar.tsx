@@ -20,8 +20,8 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
           className="h-11 w-11 rounded-xl object-cover border border-white/25 bg-white/10 shrink-0 shadow-xs"
         />
         <div className="min-w-0">
-          <h1 className="font-bold text-sm tracking-wide text-white truncate">Bagas Hidrponik</h1>
-          <p className="text-[10px] font-medium text-emerald-200 truncate">Hydroponic Smart System</p>
+          <h1 className="font-bold text-sm tracking-wide text-white truncate">Bagas Hidroponik</h1>
+          <p className="text-[10px] font-medium text-emerald-200 truncate">Sistem Cerdas Nutrisi Tanaman</p>
         </div>
       </div>
 
@@ -35,7 +35,7 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
               : 'text-emerald-100 hover:bg-emerald-800/50'
           }`}
         >
-          Telemetry Overview
+          Ringkasan Nutrisi Air
         </button>
 
         <button
@@ -46,7 +46,7 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
               : 'text-emerald-100 hover:bg-emerald-800/50'
           }`}
         >
-          Actuator &amp; Dosing Engine
+          Pengaturan &amp; Saklar Pompa
         </button>
 
         <button
@@ -57,12 +57,12 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
               : 'text-emerald-100 hover:bg-emerald-800/50'
           }`}
         >
-          Database Log &amp; Calibration
+          Riwayat Data &amp; Sensor
         </button>
       </nav>
 
       <div className="text-[10px] text-emerald-200/80 text-center pt-4 border-t border-emerald-700/50 font-medium">
-        &copy; 2026 HYDRO System
+        &copy; 2026 Bagas Hidroponik
       </div>
     </aside>
   );

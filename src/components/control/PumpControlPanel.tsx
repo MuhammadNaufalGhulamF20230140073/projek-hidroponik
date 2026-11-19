@@ -137,10 +137,10 @@ export function PumpControlPanel({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-zinc-200 pb-4">
         <div>
           <h2 className="font-mono text-xs font-black tracking-wider text-zinc-950 uppercase">
-            KONTROL AKTIVASI POMPA &amp; ENGINE NUTRISI
+            KONTROL POMPA NUTRISI
           </h2>
           <p className="font-mono text-xs font-bold text-zinc-800 mt-0.5">
-            Relay Pompa Air &bull; GPIO 23
+            Saklar Listrik Pompa Air Nutrisi
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -191,14 +191,14 @@ export function PumpControlPanel({
           )}
           <span>
             {isInCooldown && control.pump_mode === 'auto'
-              ? `JEDA COOLDOWN NUTRISI AKTIF (Tersisa: ${remainingTimeStr})`
-              : `SISTEM OTOMATIS SIAP \u2022 Pompa ON jika PPM < ${control.target_ppm_min} \u2022 Cutoff OFF di ${control.target_ppm_max} PPM`}
+              ? `WAKTU ISTIRAHAT POMPA AKTIF (Sisa jeda: ${remainingTimeStr} agar pupuk larut merata)`
+              : `SISTEM OTOMATIS SIAP \u2022 Pompa ON jika PPM < ${control.target_ppm_min} \u2022 Pompa OFF di ${control.target_ppm_max} PPM`}
           </span>
         </div>
         <span className="hidden sm:inline text-[11px] font-semibold text-zinc-600">
           {isInCooldown && control.pump_mode === 'auto'
-            ? 'Proteksi overdosis tanaman'
-            : 'Mati & Cooldown saat cap tercapai'}
+            ? 'Mencegah kelebihan pupuk'
+            : 'Mati otomatis saat nutrisi cukup'}
         </span>
       </div>
 
@@ -207,10 +207,10 @@ export function PumpControlPanel({
         {/* Kolom 1: Pilihan Mode */}
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-3">
           <span className="font-mono text-[10px] font-extrabold text-zinc-700 uppercase tracking-wider block">
-            PILIH MODE OPERASI POMPA
+            CARA KERJA POMPA
           </span>
           <p className="font-mono text-xs text-zinc-800 font-semibold leading-relaxed">
-            Gunakan mode otomatis agar dikontrol sensor atau mode manual untuk saklar langsung.
+            Pilih mode otomatis agar dikontrol sensor atau mode manual untuk menyalakan langsung.
           </p>
           <div className="grid grid-cols-2 gap-2 pt-1 font-mono">
             <button
@@ -229,7 +229,7 @@ export function PumpControlPanel({
                   MEMPROSES...
                 </>
               ) : (
-                'OTOMATIS (AUTO)'
+                'OTOMATIS (SENSOR)'
               )}
             </button>
             <button
@@ -248,7 +248,7 @@ export function PumpControlPanel({
                   MEMPROSES...
                 </>
               ) : (
-                'MANUAL (SAKLAR)'
+                'MANUAL (TOMBOL)'
               )}
             </button>
           </div>
@@ -258,9 +258,9 @@ export function PumpControlPanel({
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-3">
           <div className="flex justify-between items-center">
             <span className="font-mono text-[10px] font-extrabold text-zinc-700 uppercase tracking-wider">
-              SAKLAR KONTROL MANUAL
+              TOMBOL SAKLAR POMPA
             </span>
-            <span className="font-mono text-[10px] font-bold text-zinc-800">Relay Pin 23</span>
+            <span className="font-mono text-[10px] font-bold text-zinc-800">Pompa Nutrisi</span>
           </div>
 
           <div className="flex items-center justify-between font-mono text-xs bg-white p-2.5 rounded-lg border border-zinc-200 transition-all duration-200">
@@ -351,7 +351,7 @@ export function PumpControlPanel({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-extrabold text-zinc-700 uppercase tracking-wider block">
-                SETPOINTS &amp; REST WINDOW PARAMETERS
+                BATAS TAKARAN NUTRISI &amp; JEDA POMPA
               </span>
               {isDirty && (
                 <span className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
@@ -396,7 +396,7 @@ export function PumpControlPanel({
             ) : (
               <>
                 <Save className="h-3.5 w-3.5" />
-                {isDirty ? 'SIMPAN PERUBAHAN' : 'SIMPAN CONFIG'}
+                {isDirty ? 'SIMPAN PERUBAHAN' : 'SIMPAN PENGATURAN'}
               </>
             )}
           </button>
@@ -404,7 +404,7 @@ export function PumpControlPanel({
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-zinc-800 uppercase block">Min Threshold (Trigger ON)</label>
+            <label className="text-[10px] font-bold text-zinc-800 uppercase block">Batas Bawah (Pompa Mulai Hidup)</label>
             <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
               <input
                 type="number"
@@ -419,11 +419,11 @@ export function PumpControlPanel({
               />
               <span className="text-xs font-bold text-zinc-700 ml-2">PPM</span>
             </div>
-            <span className="text-[10px] text-zinc-700 font-semibold block">Pompa ON jika PPM &lt; ini</span>
+            <span className="text-[10px] text-zinc-700 font-semibold block">Pompa hidup jika nutrisi &lt; angka ini</span>
           </div>
 
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-zinc-800 uppercase block">Target Cap (Cutoff OFF)</label>
+            <label className="text-[10px] font-bold text-zinc-800 uppercase block">Batas Atas Target (Pompa Mati)</label>
             <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
               <input
                 type="number"
@@ -438,11 +438,11 @@ export function PumpControlPanel({
               />
               <span className="text-xs font-bold text-zinc-700 ml-2">PPM</span>
             </div>
-            <span className="text-[10px] text-zinc-700 font-semibold block">Pompa OFF saat PPM &gt;= ini</span>
+            <span className="text-[10px] text-zinc-700 font-semibold block">Pompa mati jika nutrisi naik &gt;= ini</span>
           </div>
 
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-zinc-800 uppercase block">Cooldown Window</label>
+            <label className="text-[10px] font-bold text-zinc-800 uppercase block">Jeda Istirahat Pompa</label>
             <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
               <input
                 type="number"
@@ -455,9 +455,9 @@ export function PumpControlPanel({
                 className="w-full bg-transparent text-sm font-bold text-zinc-950 focus:outline-none"
                 placeholder="60"
               />
-              <span className="text-xs font-bold text-zinc-700 ml-2">MINS</span>
+              <span className="text-xs font-bold text-zinc-700 ml-2">MENIT</span>
             </div>
-            <span className="text-[10px] text-zinc-700 font-semibold block">Maks 1x siklus per durasi ini</span>
+            <span className="text-[10px] text-zinc-700 font-semibold block">Jeda tunggu agar nutrisi larut merata</span>
           </div>
         </div>
       </div>
