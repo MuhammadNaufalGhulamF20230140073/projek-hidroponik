@@ -20,7 +20,24 @@ interface LogItem {
   is_active: boolean;
 }
 
+interface CooldownInfo {
+  is_in_cooldown: boolean;
+  remaining_seconds: number;
+  remaining_minutes: number;
+}
+
 const LOGO_SRC = '/Bagas%20Hidrponik.jpg';
+
+function formatShortTimestamp(tsRaw: unknown): string {
+  if (!tsRaw) return '-';
+  const parsed = new Date(String(tsRaw));
+  if (Number.isNaN(parsed.getTime())) return String(tsRaw);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const hh = String(parsed.getHours()).padStart(2, '0');
+  const mm = String(parsed.getMinutes()).padStart(2, '0');
+  const ss = String(parsed.getSeconds()).padStart(2, '0');
+  return `${parsed.getDate()} ${months[parsed.getMonth()]}, ${hh}:${mm}.${ss}`;
+}
 
 function normalizeLogs(rawData: unknown, fallbackLogs: LogItem[]): LogItem[] {
   if (!Array.isArray(rawData) || rawData.length === 0) {
@@ -33,37 +50,33 @@ function normalizeLogs(rawData: unknown, fallbackLogs: LogItem[]): LogItem[] {
       ? String(packetIdRaw)
       : `#${packetIdRaw}`;
 
-    const tsRaw = row.timestamp ?? row.created_at ?? '';
-    let timestamp = String(tsRaw || '-');
-    if (tsRaw) {
-      const parsed = new Date(String(tsRaw));
-      if (!Number.isNaN(parsed.getTime())) {
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-        const hh = String(parsed.getHours()).padStart(2, '0');
-        const mm = String(parsed.getMinutes()).padStart(2, '0');
-        const ss = String(parsed.getSeconds()).padStart(2, '0');
-        timestamp = `${parsed.getDate()} ${months[parsed.getMonth()]}, ${hh}:${mm}.${ss}`;
-      }
-    }
+    const timestamp = formatShortTimestamp(row.timestamp ?? row.created_at ?? '');
+    const adc_raw = Number(row.adc_raw ?? row.adcRaw ?? 0);
 
-    const adc_raw = Number(row.adc_raw ?? 0);
-    const voltageNum = Number(row.voltage ?? 0);
+    const rawVolt = row.voltage ?? row.tegangan ?? row.teganganRaw ?? 0;
+    const voltageNum = Number(rawVolt);
     const voltage =
-      typeof row.voltage === 'string' && row.voltage.includes('V')
-        ? row.voltage
-        : `${voltageNum.toFixed(3)} V`;
+      typeof rawVolt === 'string' && rawVolt.includes('V')
+        ? rawVolt
+        : `${Number.isFinite(voltageNum) ? voltageNum.toFixed(3) : '0.000'} V`;
 
-    const ppm_raw = Number(row.ppm_raw ?? 0);
-    const ppm_filtered = Number(row.ppm_filtered ?? row.ppm ?? ppm_raw);
+    const ppm_raw = Number(row.ppm_raw ?? row.ppmRaw ?? 0);
+    const ppm_filtered = Number(
+      row.ppm_filtered ?? row.ppm_stabil ?? row.ppmStabil ?? row.ppm ?? ppm_raw
+    );
 
     const is_active =
       typeof row.is_active === 'boolean'
         ? row.is_active
-        : typeof row.pump_state === 'boolean'
-          ? row.pump_state
-          : String(row.relay ?? '').toUpperCase() === 'MENYALA' ||
-            String(row.relay ?? '').toUpperCase() === 'ON' ||
-            row.relay === true;
+        : typeof row.status_pompa === 'boolean'
+          ? row.status_pompa
+          : typeof row.pompaAktif === 'boolean'
+            ? row.pompaAktif
+            : typeof row.pump_state === 'boolean'
+              ? row.pump_state
+              : String(row.relay ?? '').toUpperCase() === 'MENYALA' ||
+                String(row.relay ?? '').toUpperCase() === 'ON' ||
+                row.relay === true;
 
     const relay =
       typeof row.relay === 'string' && row.relay.trim() !== ''
@@ -88,6 +101,7 @@ function normalizeLogs(rawData: unknown, fallbackLogs: LogItem[]): LogItem[] {
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'control' | 'history'>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isInitializingDb, setIsInitializingDb] = useState(false);
   const [dbInitMessage, setDbInitMessage] = useState<string | null>(null);
 
@@ -98,7 +112,14 @@ export default function DashboardPage() {
     adcRaw: 1450,
     temperature: 25.0,
     actualPumpActive: false,
-    isOnline: true,
+    isOnline: false,
+    lastSeenSeconds: 9999,
+  });
+
+  const [cooldown, setCooldown] = useState<CooldownInfo>({
+    is_in_cooldown: false,
+    remaining_seconds: 0,
+    remaining_minutes: 0,
   });
 
   const [controlState, setControlState] = useState<SystemControl>({
@@ -116,56 +137,99 @@ export default function DashboardPage() {
     { packet_id: '#3', timestamp: '18 Nov, 19:56.46', adc_raw: 1420, voltage: '1.144 V', ppm_raw: 615.2, ppm_filtered: 612.0, relay: 'MENYALA', is_active: true },
   ]);
 
-  const syncAllData = useCallback(async () => {
+  const syncAllData = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setIsRefreshing(true);
     try {
-      const [controlRes, historyRes] = await Promise.all([
+      const [sensorRes, controlRes, historyRes] = await Promise.all([
+        fetch('/api/sensor', { cache: 'no-store' }),
         fetch('/api/control', { cache: 'no-store' }),
         fetch('/api/history?limit=25', { cache: 'no-store' }),
       ]);
 
-      const controlData = await controlRes.json();
-      const historyData = await historyRes.json();
+      const sensorData = sensorRes.ok ? await sensorRes.json() : null;
+      const controlData = controlRes.ok ? await controlRes.json() : null;
+      const historyData = historyRes.ok ? await historyRes.json() : null;
 
-      let hasAnySuccess = false;
+      let deviceOnline = false;
+      let seenSeconds = 9999;
 
-      if (controlRes.ok && controlData.success && controlData.control) {
-        hasAnySuccess = true;
-        setControlState((prev) => ({ ...prev, ...controlData.control }));
+      if (sensorData?.success) {
+        deviceOnline = Boolean(sensorData.is_online);
+        seenSeconds =
+          typeof sensorData.last_seen_seconds === 'number'
+            ? sensorData.last_seen_seconds
+            : 9999;
+
+        if (sensorData.cooldown) {
+          setCooldown({
+            is_in_cooldown: Boolean(sensorData.cooldown.is_in_cooldown),
+            remaining_seconds: Number(sensorData.cooldown.remaining_seconds || 0),
+            remaining_minutes: Number(sensorData.cooldown.remaining_minutes || 0),
+          });
+        }
+
+        if (sensorData.control) {
+          setControlState((prev) => ({ ...prev, ...sensorData.control }));
+        }
+
+        if (sensorData.data) {
+          const d = sensorData.data as Record<string, unknown>;
+          const nextPpmStabil = Number(
+            d.ppm_stabil ?? d.ppmStabil ?? d.ppm_filtered ?? telemetry.ppmStabil
+          );
+          const nextPpmRaw = Number(d.ppm_raw ?? d.ppmRaw ?? telemetry.ppmRaw);
+          const nextVoltage = Number(d.tegangan ?? d.teganganRaw ?? d.voltage ?? telemetry.voltage);
+          const nextAdcRaw = Number(d.adc_raw ?? d.adcRaw ?? telemetry.adcRaw);
+          const nextPumpActive = Boolean(
+            d.status_pompa ?? d.pompaAktif ?? d.pump_state ?? false
+          );
+
+          setTelemetry((prev) => ({
+            ...prev,
+            ppmStabil: Number.isFinite(nextPpmStabil) ? nextPpmStabil : prev.ppmStabil,
+            ppmRaw: Number.isFinite(nextPpmRaw) ? nextPpmRaw : prev.ppmRaw,
+            voltage: Number.isFinite(nextVoltage) ? nextVoltage : prev.voltage,
+            adcRaw: Number.isFinite(nextAdcRaw) ? nextAdcRaw : prev.adcRaw,
+            actualPumpActive: nextPumpActive,
+            isOnline: deviceOnline,
+            lastSeenSeconds: seenSeconds,
+          }));
+        } else {
+          setTelemetry((prev) => ({
+            ...prev,
+            isOnline: deviceOnline,
+            lastSeenSeconds: seenSeconds,
+          }));
+        }
+      } else {
         setTelemetry((prev) => ({
           ...prev,
-          actualPumpActive: Boolean(controlData.control.pump_state),
+          isOnline: false,
         }));
       }
 
-      if (historyRes.ok && historyData.success && Array.isArray(historyData.data)) {
-        hasAnySuccess = true;
-        setLogs((prevLogs) => {
-          const mapped = normalizeLogs(historyData.data, prevLogs);
-          if (mapped.length > 0) {
-            const latest = mapped[0];
-            const voltNum = parseFloat(latest.voltage);
-            setTelemetry((prev) => ({
-              ...prev,
-              ppmStabil: latest.ppm_filtered,
-              ppmRaw: latest.ppm_raw,
-              adcRaw: latest.adc_raw,
-              voltage: Number.isFinite(voltNum) ? voltNum : prev.voltage,
-              actualPumpActive: latest.is_active,
-            }));
-          }
-          return mapped;
-        });
+      if (controlData?.success && controlData.control) {
+        setControlState((prev) => ({ ...prev, ...controlData.control }));
       }
 
-      setTelemetry((prev) => ({ ...prev, isOnline: hasAnySuccess }));
+      if (historyData?.success && Array.isArray(historyData.data)) {
+        setLogs((prevLogs) => normalizeLogs(historyData.data, prevLogs));
+      }
     } catch {
-      setTelemetry((prev) => ({ ...prev, isOnline: false }));
+      setTelemetry((prev) => ({
+        ...prev,
+        isOnline: false,
+      }));
+    } finally {
+      if (showSpinner) setIsRefreshing(false);
     }
-  }, []);
+  }, [telemetry.adcRaw, telemetry.ppmRaw, telemetry.ppmStabil, telemetry.voltage]);
 
   useEffect(() => {
-    syncAllData();
-    const interval = setInterval(syncAllData, 5000);
+    syncAllData(false);
+    const interval = setInterval(() => {
+      syncAllData(false);
+    }, 5000);
     return () => clearInterval(interval);
   }, [syncAllData]);
 
@@ -177,8 +241,7 @@ export default function DashboardPage() {
       const data = await res.json();
       if (res.ok && data.success) {
         setDbInitMessage(data.message || 'Skema database berhasil diinisialisasi.');
-        setTelemetry((prev) => ({ ...prev, isOnline: true }));
-        await syncAllData();
+        await syncAllData(true);
       } else {
         setDbInitMessage(data.error || 'Gagal menginisialisasi database.');
       }
@@ -220,20 +283,17 @@ export default function DashboardPage() {
         setTelemetry((prev) => ({
           ...prev,
           actualPumpActive: Boolean(data.control.pump_state),
-          isOnline: true,
         }));
-      } else {
-        setTelemetry((prev) => ({ ...prev, isOnline: false }));
       }
     } catch {
-      setTelemetry((prev) => ({ ...prev, isOnline: false }));
+      // Tetap pertahankan state optimis dan biarkan polling menyinkronkan ulang
     }
 
     if (params.state !== undefined) {
       setTelemetry((prev) => ({ ...prev, actualPumpActive: params.state! }));
 
       const now = new Date();
-      const timeString = `${now.getDate()} Nov, ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}.${now.getSeconds().toString().padStart(2, '0')}`;
+      const timeString = formatShortTimestamp(now.toISOString());
 
       const newLogItem: LogItem = {
         packet_id: `#${logs.length + 1}`,
@@ -254,6 +314,8 @@ export default function DashboardPage() {
     setActiveTab(tab);
     setMobileMenuOpen(false);
   };
+
+  const rawDelta = (telemetry.ppmStabil - telemetry.ppmRaw).toFixed(1);
 
   return (
     <div className="flex min-h-screen bg-zinc-100 text-zinc-950 font-sans">
@@ -283,7 +345,7 @@ export default function DashboardPage() {
       )}
 
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto pb-20 md:pb-0">
-        {/* Header Atas Responsif */}
+        {/* Header Atas Responsif dengan Indikator & Tombol Refresh */}
         <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-zinc-300 bg-white px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4 shadow-xs">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <button
@@ -317,19 +379,36 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="hidden lg:flex flex-col items-end font-mono text-[10px] font-bold text-zinc-700">
+              <span>
+                LAST SEEN:{' '}
+                <strong className="text-zinc-950">
+                  {telemetry.lastSeenSeconds < 9999 ? `${telemetry.lastSeenSeconds}s ago` : 'NO DATA'}
+                </strong>
+              </span>
+              {cooldown.is_in_cooldown && (
+                <span className="text-amber-800">
+                  COOLDOWN: {cooldown.remaining_minutes}m ({cooldown.remaining_seconds}s)
+                </span>
+              )}
+            </div>
+
             <Badge
               variant={telemetry.isOnline ? 'success' : 'danger'}
               dot
               className="font-mono text-[10px] sm:text-xs font-bold"
             >
-              {telemetry.isOnline ? 'POSTGRES LIVE' : 'OFFLINE'}
+              {telemetry.isOnline ? 'ESP32 ONLINE' : 'ESP32 OFFLINE'}
             </Badge>
+
             <button
-              onClick={syncAllData}
-              className="flex items-center gap-1.5 rounded-lg border border-zinc-400 bg-white px-2.5 sm:px-3.5 py-1.5 text-xs font-bold text-zinc-900 shadow-xs hover:bg-zinc-50 transition-all cursor-pointer"
+              onClick={() => syncAllData(true)}
+              disabled={isRefreshing}
+              aria-label="Refresh data sensor dan kontrol"
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-400 bg-white px-2.5 sm:px-3.5 py-1.5 text-xs font-bold text-zinc-900 shadow-xs hover:bg-zinc-50 disabled:opacity-60 transition-all cursor-pointer"
             >
-              <RefreshCw className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Sync</span>
+              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
             </button>
           </div>
         </header>
@@ -340,7 +419,11 @@ export default function DashboardPage() {
           {activeTab === 'dashboard' && (
             <>
               <div suppressHydrationWarning>
-                <StatusBanner ppm={telemetry.ppmStabil} />
+                <StatusBanner
+                  ppm={telemetry.ppmStabil}
+                  targetMin={controlState.target_ppm_min}
+                  targetMax={controlState.target_ppm_max}
+                />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
@@ -350,24 +433,24 @@ export default function DashboardPage() {
                       NUTRIENT CONCENTRATION (TDS)
                     </span>
                     <span className="shrink-0 rounded bg-emerald-100 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-900 border border-emerald-300">
-                      IN SPEC (OPTIMAL)
+                      {telemetry.actualPumpActive ? 'PUMP ACTIVE' : 'RELAY STANDBY'}
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between gap-2">
                     <div>
                       <span className="font-mono text-4xl sm:text-5xl font-black text-zinc-950">
-                        {telemetry.ppmStabil}
+                        {telemetry.ppmStabil.toFixed(1)}
                       </span>
                       <span className="ml-2 font-mono text-xs sm:text-sm font-bold text-zinc-800">PPM</span>
                     </div>
                     <div className="text-right font-mono text-xs">
                       <span className="text-zinc-700 block font-bold">RAW DELTA</span>
-                      <span className="font-extrabold text-amber-800">-4.5 ppm</span>
+                      <span className="font-extrabold text-amber-800">{rawDelta} ppm</span>
                     </div>
                   </div>
                   <div className="mt-4 pt-4 border-t border-zinc-200 flex flex-col sm:flex-row sm:justify-between gap-1 font-mono text-xs text-zinc-900 font-bold">
                     <span>
-                      UNFILTERED ADC READ: <strong className="text-zinc-950">{telemetry.ppmRaw} ppm</strong>
+                      UNFILTERED ADC READ: <strong className="text-zinc-950">{telemetry.ppmRaw.toFixed(1)} ppm</strong>
                     </span>
                     <span>
                       SMOOTHING FACTOR: <strong className="text-zinc-950">&alpha; = 0.20</strong>
@@ -414,7 +497,7 @@ export default function DashboardPage() {
                     TELEMETRY TIME-SERIES (TDS BUFFER)
                   </h2>
                   <p className="font-mono text-xs text-zinc-800 mt-0.5 font-bold">
-                    Realtime Rolling Window &bull; 3 Sample Points
+                    Realtime Rolling Window &bull; {logs.length} Sample Points
                   </p>
                 </div>
                 <div className="h-44 sm:h-48 flex items-center justify-center border border-dashed border-zinc-300 rounded-xl bg-zinc-50 font-mono text-xs font-bold text-zinc-800 px-3 text-center">
@@ -466,7 +549,11 @@ export default function DashboardPage() {
                     <span className="text-[10px] font-black text-zinc-800 uppercase">Cooldown Window</span>
                     <div className="text-base sm:text-lg font-black text-zinc-950 mt-0.5">
                       {controlState.cooldown_minutes} Minutes{' '}
-                      <span className="text-xs font-bold text-zinc-800">(&bull; Max 1x cycle per duration)</span>
+                      <span className="text-xs font-bold text-zinc-800">
+                        {cooldown.is_in_cooldown
+                          ? `(• Sisa ${cooldown.remaining_minutes} menit)`
+                          : '(• Max 1x cycle per duration)'}
+                      </span>
                     </div>
                   </div>
                 </div>
