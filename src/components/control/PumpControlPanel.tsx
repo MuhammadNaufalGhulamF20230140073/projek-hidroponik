@@ -112,12 +112,6 @@ export function PumpControlPanel({
     }
   };
 
-  const applyPreset = (min: number, max: number) => {
-    setPpmMin(String(min));
-    setPpmMax(String(max));
-    setIsDirty(true);
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -360,23 +354,9 @@ export function PumpControlPanel({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs text-zinc-600 font-semibold">Preset Cepat:</span>
-              <button
-                type="button"
-                onClick={() => applyPreset(560, 840)}
-                className="text-[11px] rounded bg-zinc-200 px-2 py-0.5 hover:bg-zinc-300 text-zinc-900 font-bold cursor-pointer"
-              >
-                Selada (560-840)
-              </button>
-              <button
-                type="button"
-                onClick={() => applyPreset(1000, 1400)}
-                className="text-[11px] rounded bg-zinc-200 px-2 py-0.5 hover:bg-zinc-300 text-zinc-900 font-bold cursor-pointer"
-              >
-                Sayur Buah (1000-1400)
-              </button>
-            </div>
+            <p className="text-xs text-zinc-600 font-semibold mt-0.5">
+              Tentukan batas kepekatan nutrisi otomatis dan waktu istirahat pompa
+            </p>
           </div>
           <button
             type="button"
