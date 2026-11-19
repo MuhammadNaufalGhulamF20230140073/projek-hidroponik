@@ -7,7 +7,7 @@ import { SensorChart } from '@/components/dashboard/SensorChart';
 import { PumpControlPanel } from '@/components/control/PumpControlPanel';
 import { CalibrationInfo } from '@/components/control/CalibrationInfo';
 import { Badge } from '@/components/ui/Badge';
-import { RefreshCw, Database, Cpu, Sliders, Menu, X, Activity, History, Droplets, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Database, Cpu, Sliders, Menu, X, Activity, History, Droplets, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { SystemControl } from '@/lib/types/hidroponik';
 import { ManualSafetyAlertModal } from '@/components/control/ManualSafetyAlertModal';
 import { UnsavedChangesModal } from '@/components/control/UnsavedChangesModal';
@@ -141,6 +141,10 @@ export default function DashboardPage() {
 
   // State untuk Pop-up Peringatan Alat Fisik Offline (Semua fitur terkunci)
   const [showOfflineModal, setShowOfflineModal] = useState(false);
+  // State untuk Toast Notifikasi "Device Sudah Normal" saat koneksi pulih
+  const [showDeviceNormalToast, setShowDeviceNormalToast] = useState(false);
+  const prevIsOnlineRef = useRef(false);
+  const isFirstMountRef = useRef(true);
 
   // Mencegah race-condition polling background menimpa state transisi user (anti-kedut)
   const lastControlUpdateRef = useRef<number>(0);
@@ -179,6 +183,8 @@ export default function DashboardPage() {
 
   const syncAllData = useCallback(async (showSpinner = false) => {
     if (showSpinner) setIsRefreshing(true);
+    let deviceOnline = false;
+    let seenSeconds = 9999;
     try {
       const [sensorRes, controlRes, historyRes] = await Promise.all([
         fetch('/api/sensor', { cache: 'no-store' }),
@@ -189,9 +195,6 @@ export default function DashboardPage() {
       const sensorData = sensorRes.ok ? await sensorRes.json() : null;
       const controlData = controlRes.ok ? await controlRes.json() : null;
       const historyData = historyRes.ok ? await historyRes.json() : null;
-
-      let deviceOnline = false;
-      let seenSeconds = 9999;
 
       const isRecentlyUpdated = Date.now() - lastControlUpdateRef.current < 3500;
 
@@ -267,7 +270,31 @@ export default function DashboardPage() {
     } finally {
       if (showSpinner) setIsRefreshing(false);
     }
+    return deviceOnline;
   }, []);
+
+  // Deteksi pemulihan koneksi alat dari offline -> online untuk memunculkan notifikasi dan menutup pop-up
+  useEffect(() => {
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false;
+      prevIsOnlineRef.current = telemetry.isOnline;
+      return;
+    }
+    if (!prevIsOnlineRef.current && telemetry.isOnline) {
+      setShowDeviceNormalToast(true);
+      setShowOfflineModal(false);
+    }
+    prevIsOnlineRef.current = telemetry.isOnline;
+  }, [telemetry.isOnline]);
+
+  // Auto-dismiss toast "Device Sudah Normal" setelah 4.5 detik
+  useEffect(() => {
+    if (!showDeviceNormalToast) return;
+    const timer = setTimeout(() => {
+      setShowDeviceNormalToast(false);
+    }, 4500);
+    return () => clearTimeout(timer);
+  }, [showDeviceNormalToast]);
 
   // Polling loop adaptif: 2 detik saat mode manual agar sat-set seketika, 3.5 detik saat auto
   useEffect(() => {
@@ -580,8 +607,37 @@ export default function DashboardPage() {
         onClose={() => setShowOfflineModal(false)}
         onCheckConnection={() => syncAllData(true)}
         isChecking={isRefreshing}
+        isOnline={telemetry.isOnline}
         lastSeenSeconds={telemetry.lastSeenSeconds}
+        onDeviceRestored={() => {
+          setShowDeviceNormalToast(true);
+        }}
       />
+
+      {/* Toast Notifikasi Device Sudah Normal */}
+      {showDeviceNormalToast && (
+        <div className="fixed top-4 right-3 sm:right-6 z-50 flex items-center gap-3 p-3.5 sm:px-4 sm:py-3 rounded-2xl border-2 border-emerald-500 bg-white text-zinc-950 shadow-2xl ring-4 ring-emerald-500/10 font-sans text-xs animate-in slide-in-from-top-4 fade-in duration-200">
+          <div className="p-1.5 rounded-xl bg-emerald-100 text-emerald-700 shrink-0">
+            <CheckCircle2 className="h-5 w-5" />
+          </div>
+          <div className="pr-2">
+            <div className="font-extrabold text-emerald-950 flex items-center gap-1.5">
+              <span>Device Sudah Normal!</span>
+              <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded">Online</span>
+            </div>
+            <p className="text-[11px] text-zinc-600 font-medium mt-0.5">
+              Alat fisik ESP32 telah terhubung kembali. Semua fitur kontrol siap digunakan.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowDeviceNormalToast(false)}
+            aria-label="Tutup notifikasi"
+            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition cursor-pointer ml-auto"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Pop-up Menu Navigasi (Muncul saat tombol MENU diklik, tidak memenuhi layar) */}
       <Sidebar
