@@ -39,6 +39,8 @@ export async function GET() {
         } else {
           // Jendela waktu jeda sudah selesai, jatah siklus kembali segar (0 terpakai)
           currentCycles = 0;
+          control.cycle_count = 0;
+          control.window_started_at = undefined;
         }
       }
     }

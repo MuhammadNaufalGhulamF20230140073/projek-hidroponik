@@ -208,6 +208,16 @@ export async function getSensorLogs(limit = 30): Promise<SensorLog[]> {
  */
 export async function getSystemControl(): Promise<SystemControl> {
   if (!isDbConfigured()) {
+    // Reset otomatis di mock DB jika timer jendela waktu telah habis
+    if (mockDB.control.window_started_at && (mockDB.control.cycle_count ?? 0) > 0) {
+      const windowMs = new Date(mockDB.control.window_started_at).getTime();
+      const elapsed = Math.round((Date.now() - windowMs) / 1000);
+      const totalSecs = (mockDB.control.cooldown_minutes || 60) * 60;
+      if (elapsed >= totalSecs) {
+        mockDB.control.cycle_count = 0;
+        mockDB.control.window_started_at = undefined;
+      }
+    }
     return mockDB.control;
   }
 
@@ -225,17 +235,33 @@ export async function getSystemControl(): Promise<SystemControl> {
        LIMIT 1`
     );
     if (rows && rows.length > 0) {
+      let cycleCount = Number(rows[0].cycle_count ?? 0);
+      let windowStarted = rows[0].window_started_at ? String(rows[0].window_started_at) : undefined;
+      const cooldownMins = Number(rows[0].cooldown_minutes ?? 60);
+
+      // RESET OTOMATIS: Jika jendela jeda sudah selesai, reset siklus ke 0
+      if (windowStarted && cycleCount > 0) {
+        const windowMs = new Date(windowStarted).getTime();
+        const elapsedSecs = Math.round((Date.now() - windowMs) / 1000);
+        if (elapsedSecs >= cooldownMins * 60) {
+          cycleCount = 0;
+          windowStarted = undefined;
+          // Sinkronkan reset ke database Postgres secara background
+          executeQuery(`UPDATE system_control SET cycle_count = 0, window_started_at = NULL WHERE id = 'default'`).catch(() => {});
+        }
+      }
+
       return {
         id: 'default',
         pump_mode: (rows[0].pump_mode === 'manual' ? 'manual' : 'auto') as 'auto' | 'manual',
         pump_state: Boolean(rows[0].pump_state),
-        cooldown_minutes: Number(rows[0].cooldown_minutes ?? 60),
+        cooldown_minutes: cooldownMins,
         target_ppm_min: Number(rows[0].target_ppm_min ?? 560),
         target_ppm_max: Number(rows[0].target_ppm_max ?? 840),
         cooldown_enabled: Boolean(rows[0].cooldown_enabled ?? true),
         cooldown_max_cycles: Number(rows[0].cooldown_max_cycles ?? 1),
-        cycle_count: Number(rows[0].cycle_count ?? 0),
-        window_started_at: rows[0].window_started_at ? String(rows[0].window_started_at) : undefined,
+        cycle_count: cycleCount,
+        window_started_at: windowStarted,
         last_dosing_at: rows[0].last_dosing_at ? String(rows[0].last_dosing_at) : undefined,
         updated_at: rows[0].updated_at ? String(rows[0].updated_at) : undefined,
       };

@@ -273,6 +273,7 @@ export default function DashboardPage() {
             is_in_cooldown: false,
             remaining_seconds: 0,
             remaining_minutes: 0,
+            current_cycles: 0, // Reset tampilan siklus ke 0 saat timer cooldown selesai
           };
         }
         const nextSec = prev.remaining_seconds - 1;
@@ -532,7 +533,7 @@ export default function DashboardPage() {
                                 : '⏱️ JEDA SIAP'}
                             </span>
                             <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
-                              JATAH: {cooldown.current_cycles ?? 0}/{cooldown.max_cycles ?? 1}x
+                              NYALA: {cooldown.current_cycles ?? 0}/{cooldown.max_cycles ?? 1}x
                             </span>
                           </>
                         ) : (

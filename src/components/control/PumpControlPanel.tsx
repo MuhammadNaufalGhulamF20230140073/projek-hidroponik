@@ -170,23 +170,27 @@ export function PumpControlPanel({
           </p>
         </div>
         <div className="flex flex-col items-start xs:items-end gap-1 self-start xs:self-auto shrink-0">
-          {/* Indikator Realtime Sisa Waktu Cooldown & Jatah Terpakai di Atas Pompa ON/OFF (Kecil Rapi) */}
-          <div className="flex items-center gap-1.5 font-mono text-[10px] font-bold">
+          {/* Indikator Realtime Sisa Waktu Cooldown & Berapa Kali Pompa Nyala (Kecil Rapi) */}
+          <div className="flex flex-wrap items-center gap-1 font-mono text-[10px] font-bold">
             {cooldownEnabled ? (
               <>
-                <span className={`px-1.5 py-0.5 rounded border ${
+                <span className={`px-2 py-0.5 rounded border font-extrabold ${
                   isCdActive 
                     ? 'bg-amber-100 text-amber-950 border-amber-300 animate-pulse' 
-                    : 'bg-zinc-100 text-zinc-600 border-zinc-200'
+                    : 'bg-zinc-100 text-zinc-700 border-zinc-200'
                 }`}>
-                  {isCdActive ? `⏳ ${remainingTimeStr}` : '⏱️ SIAP'}
+                  {isCdActive ? `⏳ JEDA: ${remainingTimeStr}` : '⏱️ SIAP'}
                 </span>
-                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-900 border border-emerald-200">
-                  JATAH: {cooldownInfo?.current_cycles ?? 0}/{cooldownInfo?.max_cycles ?? 1}x
+                <span className={`px-2 py-0.5 rounded border font-extrabold ${
+                  (cooldownInfo?.current_cycles ?? 0) >= (cooldownInfo?.max_cycles ?? 1)
+                    ? 'bg-amber-100 text-amber-950 border-amber-300'
+                    : 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                }`}>
+                  NYALA: {cooldownInfo?.current_cycles ?? 0}/{cooldownInfo?.max_cycles ?? 1}x
                 </span>
               </>
             ) : (
-              <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-900 border border-sky-200">
+              <span className="px-2 py-0.5 rounded bg-sky-50 text-sky-900 border border-sky-300 font-extrabold">
                 BEBAS JEDA (0 ATURAN)
               </span>
             )}
@@ -345,30 +349,131 @@ export function PumpControlPanel({
            KONDISI 2: JIKA MODE OTOMATIS -> SAKLAR MANUAL DI-HIDE TOTAL
            (Hanya tampil status otomatis dan pengaturan Target Min/Max & Cooldown)
            ========================================================================= */
-        <div className="pt-1 space-y-3 animate-in fade-in duration-200">
-          {/* Banner Status Otomatis */}
-          <div className={`flex items-center justify-between gap-2.5 rounded-xl border p-3 text-xs font-medium transition-all ${
-            !control.cooldown_enabled
-              ? 'border-sky-300 bg-sky-50 text-sky-950'
-              : isCdActive
-                ? 'border-amber-300 bg-amber-50 text-amber-950'
-                : 'border-emerald-200 bg-emerald-50 text-emerald-950'
-          }`}>
-            <div className="flex items-center gap-2">
-              {!control.cooldown_enabled ? (
-                <Zap className="h-4 w-4 shrink-0 text-sky-700" />
-              ) : isCdActive ? (
-                <Timer className="h-4 w-4 shrink-0 text-amber-700 animate-spin" style={{ animationDuration: '6s' }} />
-              ) : (
-                <Zap className="h-4 w-4 shrink-0 text-emerald-700" />
-              )}
-              <span>
-                {!control.cooldown_enabled
-                  ? `Mode Bebas Cooldown Aktif \u2022 Pompa ON saat PPM < ${control.target_ppm_min} \u2022 OFF di >= ${control.target_ppm_max} (Tanpa Jeda)`
-                  : isCdActive
-                    ? `Jeda Cooldown Aktif (Sisa: ${remainingTimeStr} \u2022 Batas ${control.cooldown_max_cycles ?? 1}x per ${control.cooldown_minutes} menit)`
-                    : `Sistem Otomatis Siap \u2022 ON di < ${control.target_ppm_min} PPM \u2022 OFF di >= ${control.target_ppm_max} (Maks ${control.cooldown_max_cycles ?? 1}x per ${control.cooldown_minutes}m)`}
+        <div className="pt-1 space-y-3.5 animate-in fade-in duration-200">
+          {/* =========================================================================
+              KARTU INFORMASI BATAS AKTIF (MIN / MAX & JEDA TERSIMPAN)
+              Selalu tampil jelas di atas agar user tahu nilai yang tersimpan di sistem
+             ========================================================================= */}
+          <div className="rounded-xl border border-emerald-300/80 bg-gradient-to-br from-emerald-50/80 via-white to-emerald-50/40 p-3 sm:p-3.5 shadow-2xs">
+            <div className="flex items-center justify-between gap-2 border-b border-emerald-200/60 pb-2 mb-2.5 font-mono">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse shrink-0" />
+                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-950 truncate">
+                  BATAS NUTRISI AKTIF (TERSIMPAN)
+                </span>
+              </div>
+              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded border border-emerald-300 shrink-0 shadow-2xs">
+                ✓ Tersimpan di Alat
               </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono">
+              {/* Target Min Aktif */}
+              <div className="bg-white p-2.5 rounded-lg border border-emerald-200/80 shadow-2xs">
+                <span className="text-[9px] font-bold text-zinc-500 uppercase block">Target Min (ON)</span>
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  <span className="text-lg sm:text-xl font-black text-emerald-900">{control.target_ppm_min ?? 560}</span>
+                  <span className="text-[10px] font-bold text-zinc-700">PPM</span>
+                </div>
+                <span className="text-[9px] text-zinc-500 block truncate font-sans">Pompa ON jika PPM &lt; ini</span>
+              </div>
+
+              {/* Target Max Aktif */}
+              <div className="bg-white p-2.5 rounded-lg border border-emerald-200/80 shadow-2xs">
+                <span className="text-[9px] font-bold text-zinc-500 uppercase block">Target Max (OFF)</span>
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  <span className="text-lg sm:text-xl font-black text-zinc-950">{control.target_ppm_max ?? 840}</span>
+                  <span className="text-[10px] font-bold text-zinc-700">PPM</span>
+                </div>
+                <span className="text-[9px] text-zinc-500 block truncate font-sans">Pompa OFF jika PPM &gt;= ini</span>
+              </div>
+
+              {/* Aturan Cooldown Aktif */}
+              <div className="col-span-2 sm:col-span-1 bg-white p-2.5 rounded-lg border border-emerald-200/80 shadow-2xs">
+                <span className="text-[9px] font-bold text-zinc-500 uppercase block">Aturan Jeda</span>
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  <span className="text-sm sm:text-base font-black text-zinc-900">
+                    {control.cooldown_enabled !== false ? `${control.cooldown_minutes ?? 60} Menit` : 'Bebas Jeda'}
+                  </span>
+                </div>
+                <span className="text-[9px] text-zinc-500 block truncate font-sans">
+                  {control.cooldown_enabled !== false ? `Maksimal ${control.cooldown_max_cycles ?? 1}x nyala` : '0 aturan pembatasan'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Banner Status Otomatis & Rincian Frekuensi Pompa */}
+          <div className={`rounded-xl border p-3.5 space-y-2 transition-all text-xs font-sans shadow-2xs ${
+            !control.cooldown_enabled
+              ? 'border-sky-300 bg-sky-50/90 text-sky-950'
+              : isCdActive
+                ? 'border-amber-300 bg-amber-50/95 text-amber-950'
+                : 'border-emerald-300 bg-emerald-50/90 text-emerald-950'
+          }`}>
+            <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-1.5 border-b border-black/5 pb-2 font-mono text-[11px] font-bold">
+              <div className="flex items-center gap-2">
+                {!control.cooldown_enabled ? (
+                  <Zap className="h-4 w-4 shrink-0 text-sky-700" />
+                ) : isCdActive ? (
+                  <Timer className="h-4 w-4 shrink-0 text-amber-700 animate-spin" style={{ animationDuration: '6s' }} />
+                ) : (
+                  <Zap className="h-4 w-4 shrink-0 text-emerald-700" />
+                )}
+                <span className="uppercase font-black tracking-wide">
+                  {!control.cooldown_enabled
+                    ? 'STATUS: BEBAS ATURAN (TANPA COOLDOWN)'
+                    : isCdActive
+                      ? 'STATUS: DALAM JEDA COOLDOWN (TERKUNCI)'
+                      : 'STATUS: SIAP MENYALA OTOMATIS'}
+                </span>
+              </div>
+              <span className={`px-2 py-0.5 rounded border text-[10px] self-start xs:self-auto font-mono ${
+                isCdActive 
+                  ? 'bg-amber-100 text-amber-950 border-amber-300 font-black' 
+                  : 'bg-white/80 text-zinc-800 border-zinc-200'
+              }`}>
+                {cooldownEnabled 
+                  ? (isCdActive ? `Sisa Waktu: ${remainingTimeStr}` : 'Jeda: Siaga / Siap') 
+                  : 'Tanpa Jeda Waktu'}
+              </span>
+            </div>
+
+            {/* Rincian Sangat Jelas Berapa Kali Pompa Sudah Nyala */}
+            <div className="space-y-1.5 text-xs">
+              {cooldownEnabled ? (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 text-[11px]">
+                  <div>
+                    <span className="text-zinc-600 font-medium">Frekuensi Pompa: </span>
+                    <strong className="text-zinc-950 font-mono text-xs font-black">
+                      Sudah menyala {cooldownInfo?.current_cycles ?? 0} kali
+                    </strong>{' '}
+                    <span className="text-zinc-600 font-medium">
+                      dari batas maksimal {cooldownInfo?.max_cycles ?? 1} kali per {control.cooldown_minutes} menit.
+                    </span>
+                  </div>
+
+                  <div className="font-mono font-bold text-[10px] shrink-0">
+                    {(cooldownInfo?.current_cycles ?? 0) >= (cooldownInfo?.max_cycles ?? 1) ? (
+                      <span className="text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-300 font-bold">
+                        Jatah Habis ({cooldownInfo?.max_cycles ?? 1}x) &bull; Terkunci sampai jeda selesai
+                      </span>
+                    ) : (cooldownInfo?.current_cycles ?? 0) > 0 ? (
+                      <span className="text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300 font-bold">
+                        Sisa {(cooldownInfo?.max_cycles ?? 1) - (cooldownInfo?.current_cycles ?? 0)}x jatah nyala lagi
+                      </span>
+                    ) : (
+                      <span className="text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300 font-bold">
+                        Jatah baru penuh ({cooldownInfo?.max_cycles ?? 1}x) &bull; Siap menyala
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-sky-900 font-medium">
+                  <strong>Mode Bebas:</strong> Pompa akan langsung menyala kapan saja begitu nilai PPM &lt; {control.target_ppm_min} tanpa batasan frekuensi dan tanpa jeda timer.
+                </p>
+              )}
             </div>
           </div>
 
