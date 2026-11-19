@@ -606,64 +606,52 @@ export function PumpControlPanel({
                   </div>
                 </div>
 
-                {/* 2. Pilihan Radio Button: Pakai Fitur Cooldown vs Tutup / Matikan Fitur */}
+                {/* 2. Katup Kontrol Cooldown (Jeda Pompa): Segmented Switch Kiri-Kanan */}
                 <div className="pt-2 border-t border-zinc-200/60 space-y-3 font-sans">
-                  <span className="text-[10px] font-mono font-bold text-zinc-800 uppercase tracking-wider block">
-                    PILIHAN SISTEM COOLDOWN (JEDA POMPA)
-                  </span>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-3 rounded-xl border border-zinc-200 shadow-2xs">
+                    <div>
+                      <span className="text-xs font-black text-zinc-950 uppercase tracking-wide block font-mono">
+                        KATUP FITUR COOLDOWN
+                      </span>
+                      <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
+                        {cooldownEnabled 
+                          ? '● Katup Terbuka (Aktif): Pompa dibatasi waktu jeda & frekuensi nyala' 
+                          : '○ Katup Tertutup (Mati): Fitur dimatikan, pompa bebas menyala tanpa jeda'}
+                      </p>
+                    </div>
 
-                  <div className="grid grid-cols-1 gap-2.5">
-                    {/* Radio Option 1: Pakai Fitur Cooldown */}
-                    <label className={`flex items-start gap-3 p-3 sm:p-3.5 rounded-xl border cursor-pointer transition-all duration-150 ${
-                      cooldownEnabled 
-                        ? 'bg-emerald-50/80 border-emerald-400 ring-2 ring-emerald-500/20 shadow-2xs' 
-                        : 'bg-white border-zinc-200 hover:bg-zinc-50'
-                    }`}>
-                      <input
-                        type="radio"
-                        name="cooldown_toggle"
-                        checked={cooldownEnabled}
-                        onChange={() => {
-                          setCooldownEnabled(true);
-                          setIsDirty(true);
-                        }}
-                        className="mt-0.5 h-4 w-4 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                      />
-                      <div className="space-y-0.5 min-w-0">
-                        <span className="text-xs sm:text-sm font-bold text-zinc-950 block">
-                          Pakai Fitur Cooldown (Batas Frekuensi &amp; Jeda)
-                        </span>
-                        <span className="text-[11px] text-zinc-600 font-medium block">
-                          Membatasi berapa kali pompa boleh aktif dalam periode menit tertentu agar pupuk larut merata.
-                        </span>
-                      </div>
-                    </label>
-
-                    {/* Radio Option 2: Tutup / Matikan Fitur Cooldown */}
-                    <label className={`flex items-start gap-3 p-3 sm:p-3.5 rounded-xl border cursor-pointer transition-all duration-150 ${
-                      !cooldownEnabled 
-                        ? 'bg-sky-50/80 border-sky-400 ring-2 ring-sky-500/20 shadow-2xs' 
-                        : 'bg-white border-zinc-200 hover:bg-zinc-50'
-                    }`}>
-                      <input
-                        type="radio"
-                        name="cooldown_toggle"
-                        checked={!cooldownEnabled}
-                        onChange={() => {
+                    {/* Segmented Button Kiri - Kanan seperti Katup */}
+                    <div className="inline-flex items-center bg-zinc-100 p-1 rounded-xl border border-zinc-200/80 self-start sm:self-auto shrink-0 shadow-inner">
+                      <button
+                        type="button"
+                        onClick={() => {
                           setCooldownEnabled(false);
                           setIsDirty(true);
                         }}
-                        className="mt-0.5 h-4 w-4 text-sky-600 focus:ring-sky-500 cursor-pointer"
-                      />
-                      <div className="space-y-0.5 min-w-0">
-                        <span className="text-xs sm:text-sm font-bold text-zinc-950 block">
-                          Tutup / Matikan Fitur Cooldown (Bebas Aturan)
-                        </span>
-                        <span className="text-[11px] text-zinc-600 font-medium block">
-                          Fitur jeda dimatikan. Pompa bebas menyala kapan saja begitu PPM &lt; Target Min tanpa batas timer.
-                        </span>
-                      </div>
-                    </label>
+                        className={`flex items-center gap-1.5 py-1.5 px-3.5 text-xs font-mono font-bold rounded-lg transition-all duration-200 cursor-pointer ${
+                          !cooldownEnabled
+                            ? 'bg-zinc-900 text-white shadow-xs font-extrabold'
+                            : 'text-zinc-600 hover:text-zinc-900 hover:bg-white/60'
+                        }`}
+                      >
+                        <span>TUTUP (MATI)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCooldownEnabled(true);
+                          setIsDirty(true);
+                        }}
+                        className={`flex items-center gap-1.5 py-1.5 px-3.5 text-xs font-mono font-bold rounded-lg transition-all duration-200 cursor-pointer ${
+                          cooldownEnabled
+                            ? 'bg-emerald-700 text-white shadow-xs font-extrabold'
+                            : 'text-zinc-600 hover:text-zinc-900 hover:bg-white/60'
+                        }`}
+                      >
+                        <span>BUKA (AKTIF)</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* KONDISI: Jika Dipakai -> Munculkan Settingan. Jika Ditutup -> Matikan & Sembunyikan Settingan */}
@@ -719,8 +707,8 @@ export function PumpControlPanel({
                       </div>
                     </div>
                   ) : (
-                    <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-950 text-xs font-sans animate-in fade-in duration-150">
-                      <span className="font-bold">✓ Fitur Cooldown Ditutup (Dimatikan):</span> Pompa beroperasi bebas tanpa batas frekuensi dan tanpa waktu jeda setiap kali PPM &lt; {ppmMin} PPM.
+                    <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-zinc-600 text-xs font-sans animate-in fade-in duration-150">
+                      <span className="font-bold text-zinc-900">○ Katup Tertutup (Fitur Jeda Mati):</span> Pompa beroperasi bebas menyala kapan saja begitu PPM &lt; {ppmMin} PPM tanpa timer jeda.
                     </div>
                   )}
 
