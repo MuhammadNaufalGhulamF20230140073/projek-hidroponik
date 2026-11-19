@@ -561,58 +561,13 @@ export default function DashboardPage() {
 
           {/* TAB 2: PENGATURAN & SAKLAR POMPA */}
           {activeTab === 'control' && (
-            <div className="space-y-5 sm:space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                <PumpControlPanel
-                  control={controlState}
-                  actualPumpActive={telemetry.actualPumpActive}
-                  cooldownInfo={cooldown}
-                  onUpdateControl={handleUpdateControl}
-                />
-
-                <div className="rounded-2xl border border-zinc-300 bg-white p-4 sm:p-6 shadow-sm space-y-4">
-                  <div className="border-b border-zinc-200 pb-3">
-                    <h2 className="font-mono text-xs font-black tracking-wider text-zinc-950 flex items-center gap-1.5 uppercase">
-                      <Sliders className="h-4 w-4 shrink-0 text-emerald-800" />
-                      TARGET PPM (MIN / MAX) &amp; COOLDOWN
-                    </h2>
-                    <p className="font-mono text-xs text-zinc-800 mt-0.5 font-bold">
-                      Parameter batas pompa otomatis (Target Min, Max &amp; Cooldown)
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 sm:gap-4 font-mono">
-                    <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4">
-                      <span className="text-[10px] font-black text-zinc-800 uppercase">Target PPM Min (ON)</span>
-                      <div className="text-lg sm:text-xl font-black text-zinc-950 mt-1">
-                        {controlState.target_ppm_min}{' '}
-                        <span className="text-xs font-bold text-zinc-800">PPM</span>
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4">
-                      <span className="text-[10px] font-black text-zinc-800 uppercase">Target PPM Max (OFF)</span>
-                      <div className="text-lg sm:text-xl font-black text-zinc-950 mt-1">
-                        {controlState.target_ppm_max}{' '}
-                        <span className="text-xs font-bold text-zinc-800">PPM</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 font-mono">
-                    <span className="text-[10px] font-black text-zinc-800 uppercase">Cooldown Time</span>
-                    <div className="text-base sm:text-lg font-black text-zinc-950 mt-0.5">
-                      {controlState.cooldown_minutes} Menit{' '}
-                      <span className="text-xs font-bold text-zinc-800">
-                        {cooldown.is_in_cooldown
-                          ? `(\u2022 Sisa ${Math.floor(cooldown.remaining_seconds / 60)}m ${(cooldown.remaining_seconds % 60).toString().padStart(2, '0')}s)`
-                          : '(\u2022 Maksimal 1x siklus per durasi)'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <CalibrationInfo />
+            <div className="space-y-4 max-w-4xl w-full mx-auto">
+              <PumpControlPanel
+                control={controlState}
+                actualPumpActive={telemetry.actualPumpActive}
+                cooldownInfo={cooldown}
+                onUpdateControl={handleUpdateControl}
+              />
             </div>
           )}
 
