@@ -239,6 +239,7 @@ export async function updatePumpControl(params: {
   target_ppm_max?: number;
   cooldown_minutes?: number;
   last_dosing_at?: string;
+  reset_cooldown?: boolean;
 }): Promise<SystemControl> {
   const current = await getSystemControl();
   const newMode = params.mode ?? current.pump_mode ?? 'auto';
@@ -246,7 +247,7 @@ export async function updatePumpControl(params: {
   const newMin = params.target_ppm_min !== undefined ? params.target_ppm_min : (current.target_ppm_min ?? 560);
   const newMax = params.target_ppm_max !== undefined ? params.target_ppm_max : (current.target_ppm_max ?? 840);
   const newCooldown = params.cooldown_minutes !== undefined ? params.cooldown_minutes : (current.cooldown_minutes ?? 60);
-  const newLastDosing = params.last_dosing_at !== undefined ? params.last_dosing_at : current.last_dosing_at;
+  const newLastDosing = params.reset_cooldown ? null : (params.last_dosing_at !== undefined ? params.last_dosing_at : current.last_dosing_at);
 
   if (!isDbConfigured()) {
     mockDB.control.pump_mode = newMode;
@@ -254,7 +255,7 @@ export async function updatePumpControl(params: {
     mockDB.control.target_ppm_min = newMin;
     mockDB.control.target_ppm_max = newMax;
     mockDB.control.cooldown_minutes = newCooldown;
-    if (newLastDosing) mockDB.control.last_dosing_at = newLastDosing;
+    mockDB.control.last_dosing_at = newLastDosing || undefined;
     mockDB.control.updated_at = new Date().toISOString();
     return mockDB.control;
   }
@@ -272,10 +273,10 @@ export async function updatePumpControl(params: {
          target_ppm_min = EXCLUDED.target_ppm_min,
          target_ppm_max = EXCLUDED.target_ppm_max,
          cooldown_minutes = EXCLUDED.cooldown_minutes,
-         last_dosing_at = COALESCE(EXCLUDED.last_dosing_at, system_control.last_dosing_at),
+         last_dosing_at = ${params.reset_cooldown ? 'NULL' : 'COALESCE(EXCLUDED.last_dosing_at, system_control.last_dosing_at)'},
          updated_at = NOW()
      RETURNING id, pump_mode, pump_state, target_ppm_min, target_ppm_max, cooldown_minutes, last_dosing_at, updated_at`,
-    [newMode, newState, newMin, newMax, newCooldown, newLastDosing || null]
+    [newMode, newState, newMin, newMax, newCooldown, newLastDosing]
   );
 
   return {

@@ -65,8 +65,8 @@ unsigned long waktuSelesaiDosing = 0; // Timestamp millis saat siklus dosing sel
 bool laporanDosingSelesai = false;
 
 unsigned long waktuKirim = 0;
-const unsigned long INTERVAL_KIRIM_AUTO   = 4000; // Kirim data setiap 4 detik saat AUTO
-const unsigned long INTERVAL_KIRIM_MANUAL = 2000; // Kirim data setiap 2 detik saat MANUAL agar sat-set!
+const unsigned long INTERVAL_KIRIM_AUTO   = 3000; // Kirim data setiap 3 detik saat AUTO
+const unsigned long INTERVAL_KIRIM_MANUAL = 1000; // Kirim data setiap 1 detik saat MANUAL agar super sat-set seketika!
 
 // ============================================================================
 // 6. PENGATURAN POLARITAS RELAY

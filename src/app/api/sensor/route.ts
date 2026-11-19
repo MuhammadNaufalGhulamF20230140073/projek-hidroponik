@@ -28,9 +28,15 @@ export async function GET() {
       }
     }
 
+    // 3. Status pompa yang selaras dengan mode operasi (cegah flicker delay status tunda saat mode manual)
+    const effectiveLatest = latest ? {
+      ...latest,
+      status_pompa: control.pump_mode === 'manual' ? Boolean(control.pump_state) : Boolean(latest.status_pompa),
+    } : null;
+
     return NextResponse.json({
       success: true,
-      data: latest,
+      data: effectiveLatest,
       control,
       is_online,
       last_seen_seconds: diffSeconds,

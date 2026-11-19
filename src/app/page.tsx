@@ -223,13 +223,40 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // Polling loop adaptif: 2 detik saat mode manual agar sat-set seketika, 3.5 detik saat auto
   useEffect(() => {
     syncAllData(false);
+    const intervalMs = controlState.pump_mode === 'manual' ? 2000 : 3500;
     const interval = setInterval(() => {
       syncAllData(false);
-    }, 5000);
+    }, intervalMs);
     return () => clearInterval(interval);
-  }, [syncAllData]);
+  }, [syncAllData, controlState.pump_mode]);
+
+  // Realtime countdown local ticker: mengurangi 1 detik per detik agar timer countdown berjalan mulus (misal: 1m 22s -> 1m 21s)
+  useEffect(() => {
+    if (!cooldown.is_in_cooldown || cooldown.remaining_seconds <= 0) return;
+
+    const timer = setInterval(() => {
+      setCooldown((prev) => {
+        if (!prev.is_in_cooldown || prev.remaining_seconds <= 1) {
+          return {
+            is_in_cooldown: false,
+            remaining_seconds: 0,
+            remaining_minutes: 0,
+          };
+        }
+        const nextSec = prev.remaining_seconds - 1;
+        return {
+          is_in_cooldown: true,
+          remaining_seconds: nextSec,
+          remaining_minutes: Math.ceil(nextSec / 60),
+        };
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [cooldown.is_in_cooldown, cooldown.remaining_seconds > 0]);
 
   const handleInitDatabase = async () => {
     setIsInitializingDb(true);
@@ -430,8 +457,14 @@ export default function DashboardPage() {
                     <span className="font-mono text-[11px] sm:text-xs font-black tracking-wider text-zinc-900">
                       NUTRIENT CONCENTRATION (TDS)
                     </span>
-                    <span className="shrink-0 rounded bg-emerald-100 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-900 border border-emerald-300">
-                      {telemetry.actualPumpActive ? 'PUMP ACTIVE' : 'RELAY STANDBY'}
+                    <span className={`shrink-0 rounded px-2 py-0.5 font-mono text-[10px] font-bold border ${
+                      (controlState.pump_mode === 'manual' ? Boolean(controlState.pump_state) : telemetry.actualPumpActive)
+                        ? 'bg-emerald-100 text-emerald-950 border-emerald-400 animate-pulse'
+                        : 'bg-zinc-100 text-zinc-800 border-zinc-300'
+                    }`}>
+                      {(controlState.pump_mode === 'manual' ? Boolean(controlState.pump_state) : telemetry.actualPumpActive)
+                        ? 'PUMP ACTIVE'
+                        : 'RELAY STANDBY'}
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between gap-2">
@@ -512,6 +545,7 @@ export default function DashboardPage() {
                 <PumpControlPanel
                   control={controlState}
                   actualPumpActive={telemetry.actualPumpActive}
+                  cooldownInfo={cooldown}
                   onUpdateControl={handleUpdateControl}
                 />
 
@@ -549,8 +583,8 @@ export default function DashboardPage() {
                       {controlState.cooldown_minutes} Minutes{' '}
                       <span className="text-xs font-bold text-zinc-800">
                         {cooldown.is_in_cooldown
-                          ? `(• Sisa ${cooldown.remaining_minutes} menit)`
-                          : '(• Max 1x cycle per duration)'}
+                          ? `(\u2022 Sisa ${Math.floor(cooldown.remaining_seconds / 60)}m ${(cooldown.remaining_seconds % 60).toString().padStart(2, '0')}s)`
+                          : '(\u2022 Max 1x cycle per duration)'}
                       </span>
                     </div>
                   </div>
