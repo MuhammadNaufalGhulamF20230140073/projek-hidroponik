@@ -155,6 +155,30 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
     setHoverIndex(null);
   };
 
+  // Handle interaksi sentuhan layar di HP (Android & iOS)
+  const handleTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (points.length === 0 || !e.touches[0]) return;
+    const svgRect = e.currentTarget.getBoundingClientRect();
+    const touch = e.touches[0];
+    const mouseX = ((touch.clientX - svgRect.left) / svgRect.width) * width;
+
+    let closestIdx = 0;
+    let closestDist = Infinity;
+    points.forEach((p, idx) => {
+      const dist = Math.abs(p.x - mouseX);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestIdx = idx;
+      }
+    });
+
+    setHoverIndex(closestIdx);
+  };
+
+  const handleTouchEnd = () => {
+    setTimeout(() => setHoverIndex(null), 2500);
+  };
+
   const activeHover = hoverIndex !== null && points[hoverIndex] ? points[hoverIndex] : null;
 
   return (
@@ -219,9 +243,12 @@ export function SensorChart({ logs = [], targetMin, targetMax }: SensorChartProp
           <>
             <svg
               viewBox={`0 0 ${width} ${height}`}
-              className="w-full h-auto overflow-visible cursor-crosshair"
+              className="w-full h-auto overflow-visible cursor-crosshair touch-pan-y"
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
+              onTouchStart={handleTouchMove}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
             >
               <defs>
                 {/* Gradient area bawah kurva PPM Stabil */}

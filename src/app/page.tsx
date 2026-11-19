@@ -7,7 +7,7 @@ import { SensorChart } from '@/components/dashboard/SensorChart';
 import { PumpControlPanel } from '@/components/control/PumpControlPanel';
 import { CalibrationInfo } from '@/components/control/CalibrationInfo';
 import { Badge } from '@/components/ui/Badge';
-import { RefreshCw, Database, Cpu, Sliders, Menu, X, Activity, History } from 'lucide-react';
+import { RefreshCw, Database, Cpu, Sliders, Menu, X, Activity, History, Droplets } from 'lucide-react';
 import { SystemControl } from '@/lib/types/hidroponik';
 
 interface LogItem {
@@ -368,93 +368,84 @@ export default function DashboardPage() {
 
   return (
     <div className="flex min-h-screen bg-zinc-100 text-zinc-950 font-sans">
-      {/* Sidebar Desktop */}
-      <div className="hidden md:flex shrink-0">
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      </div>
+      {/* Pop-up Menu Navigasi (Muncul saat tombol MENU diklik, tidak memenuhi layar) */}
+      <Sidebar
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        activeTab={activeTab}
+        setActiveTab={handleSelectTab}
+        isOnline={telemetry.isOnline}
+      />
 
-      {/* Drawer Sidebar Mode HP */}
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 flex md:hidden">
-          <div
-            className="fixed inset-0 bg-zinc-950/60"
-            onClick={() => setMobileMenuOpen(false)}
-          />
-          <div className="relative z-10 flex flex-col h-full shadow-2xl">
-            <Sidebar activeTab={activeTab} setActiveTab={handleSelectTab} />
-            <button
-              onClick={() => setMobileMenuOpen(false)}
-              aria-label="Tutup menu"
-              className="absolute top-3 right-3 p-1.5 rounded-lg bg-emerald-800 text-white border border-emerald-600/50 hover:bg-emerald-700 cursor-pointer"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto pb-20 md:pb-0">
-        {/* Header Atas Responsif */}
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-zinc-300 bg-white px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4 shadow-xs">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto pb-8 sm:pb-12">
+        {/* Header Atas Responsif & Rapi untuk HP (Android & iOS) maupun Desktop */}
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-zinc-200 bg-white/95 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3.5 shadow-2xs">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {/* Tombol Buka Menu Pop-up (Tampil di HP & Desktop) */}
             <button
               onClick={() => setMobileMenuOpen(true)}
-              aria-label="Buka menu"
-              className="md:hidden shrink-0 p-2 rounded-lg border border-zinc-300 bg-zinc-50 text-zinc-900 hover:bg-zinc-100 cursor-pointer"
+              aria-label="Buka menu navigasi"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-emerald-700/30 bg-emerald-50 text-emerald-950 hover:bg-emerald-100 active:scale-95 transition-all cursor-pointer shrink-0 font-extrabold text-xs shadow-2xs"
             >
-              <Menu className="h-4 w-4" />
+              <Menu className="h-4 w-4 text-emerald-800" />
+              <span className="font-mono text-xs font-black tracking-tight">MENU</span>
             </button>
 
+            {/* Logo Brand */}
             <img
               src={LOGO_SRC}
-              alt="Logo Hydro"
-              className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl object-cover border border-zinc-300 shadow-xs shrink-0"
+              alt="Logo Bagas Hidroponik"
+              className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl object-cover border border-zinc-300 shadow-2xs shrink-0"
             />
 
+            {/* Judul & Nama Layar Aktif */}
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs sm:text-sm font-black tracking-wider text-emerald-800 uppercase">
-                  HYDRO
+              <div className="flex items-center gap-1.5 truncate">
+                <span className="font-extrabold text-xs sm:text-sm text-zinc-950 truncate">
+                  Bagas Hidroponik
                 </span>
-                <span className="text-zinc-400 font-bold">/</span>
-                <h1 className="text-sm sm:text-base font-black tracking-tight text-zinc-950 truncate">
-                  Monitoring &amp; Kontrol Hidroponik
-                </h1>
+                <span className="text-zinc-300 hidden sm:inline font-bold">|</span>
+                <span className="hidden sm:inline-block text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 truncate">
+                  {activeTab === 'dashboard' && 'Ringkasan Nutrisi'}
+                  {activeTab === 'control' && 'Pengaturan Pompa'}
+                  {activeTab === 'history' && 'Riwayat Sensor'}
+                </span>
               </div>
-              <p className="text-[11px] sm:text-xs font-semibold text-zinc-800 mt-0.5 truncate">
-                Sistem Pemantauan Otomatis Kadar Nutrisi &amp; Pompa Air
+              <p className="text-[10px] sm:text-xs text-zinc-500 font-medium truncate block">
+                {activeTab === 'dashboard' && 'Kadar nutrisi & kondisi pompa'}
+                {activeTab === 'control' && 'Saklar listrik & batas takaran'}
+                {activeTab === 'history' && 'Catatan rekam riwayat sensor'}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <div className="hidden lg:flex flex-col items-end font-mono text-[10px] font-bold text-zinc-700">
-              <span>
-                UPDATE:{' '}
-                <strong className="text-zinc-950">
-                  {telemetry.lastSeenSeconds < 9999 ? `${telemetry.lastSeenSeconds}s lalu` : 'BELUM ADA DATA'}
-                </strong>
+          {/* Sisi Kanan: Status Koneksi & Tombol Refresh */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            {cooldown.is_in_cooldown && (
+              <span className="hidden lg:inline-flex text-[10px] font-mono font-bold text-amber-800 bg-amber-50 px-2 py-1 rounded-md border border-amber-300">
+                JEDA: {Math.floor(cooldown.remaining_seconds / 60)}m {(cooldown.remaining_seconds % 60).toString().padStart(2, '0')}s
               </span>
-              {cooldown.is_in_cooldown && (
-                <span className="text-amber-800">
-                  JEDA POMPA: {Math.floor(cooldown.remaining_seconds / 60)}m {(cooldown.remaining_seconds % 60).toString().padStart(2, '0')}s
-                </span>
-              )}
+            )}
+
+            {/* Indikator Online/Offline Responsif */}
+            <div className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg border text-[10px] sm:text-xs font-mono font-bold ${
+              telemetry.isOnline 
+                ? 'bg-emerald-50 text-emerald-900 border-emerald-300' 
+                : 'bg-rose-50 text-rose-900 border-rose-300'
+            }`}>
+              <span className={`h-2 w-2 rounded-full ${
+                telemetry.isOnline ? 'bg-emerald-600 animate-pulse' : 'bg-rose-600'
+              }`} />
+              <span className="hidden sm:inline">{telemetry.isOnline ? 'ALAT TERHUBUNG' : 'TERPUTUS'}</span>
+              <span className="sm:hidden">{telemetry.isOnline ? 'ONLINE' : 'OFFLINE'}</span>
             </div>
 
-            <Badge
-              variant={telemetry.isOnline ? 'success' : 'danger'}
-              dot
-              className="font-mono text-[10px] sm:text-xs font-bold"
-            >
-              {telemetry.isOnline ? 'ALAT TERHUBUNG' : 'ALAT TERPUTUS'}
-            </Badge>
-
+            {/* Tombol Refresh Data */}
             <button
               onClick={() => syncAllData(true)}
               disabled={isRefreshing}
-              aria-label="Refresh data sensor dan kontrol"
-              className="flex items-center gap-1.5 rounded-lg border border-zinc-400 bg-white px-2.5 sm:px-3.5 py-1.5 text-xs font-bold text-zinc-900 shadow-xs hover:bg-zinc-50 disabled:opacity-60 transition-all cursor-pointer"
+              aria-label="Segarkan data sensor"
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 sm:px-3 py-1.5 text-xs font-bold text-zinc-900 shadow-2xs hover:bg-zinc-50 active:scale-95 disabled:opacity-60 transition-all cursor-pointer"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">{isRefreshing ? 'Memuat...' : 'Perbarui'}</span>
@@ -463,7 +454,7 @@ export default function DashboardPage() {
         </header>
 
         {/* Konten Utama */}
-        <div className="p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-6 max-w-7xl w-full mx-auto">
+        <div className="p-3 sm:p-5 lg:p-6 space-y-3.5 sm:space-y-5 max-w-5xl w-full mx-auto">
           {/* TAB 1: TELEMETRY OVERVIEW */}
           {activeTab === 'dashboard' && (
             <>
@@ -475,11 +466,12 @@ export default function DashboardPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 sm:gap-5">
                 {/* Kartu 1: Kadar Nutrisi Air */}
-                <div className="rounded-2xl border border-zinc-300 bg-white p-4 sm:p-6 shadow-sm hover:shadow-md transition">
-                  <div className="flex items-center justify-between gap-2 mb-4 border-b border-zinc-200 pb-3">
-                    <span className="font-mono text-[11px] sm:text-xs font-black tracking-wider text-zinc-900">
+                <div className="rounded-2xl border border-zinc-300 bg-white p-3.5 sm:p-5 shadow-xs hover:shadow-sm transition">
+                  <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4 border-b border-zinc-200 pb-2.5 sm:pb-3">
+                    <span className="font-mono text-[11px] sm:text-xs font-black tracking-wider text-zinc-900 flex items-center gap-1.5">
+                      <Droplets className="h-4 w-4 text-emerald-700" />
                       KADAR NUTRISI AIR (TDS)
                     </span>
                     <span className={`shrink-0 rounded px-2 py-0.5 font-mono text-[10px] font-bold border transition-colors duration-300 ${
@@ -494,17 +486,17 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex items-baseline justify-between gap-2">
                     <div>
-                      <span className="font-mono text-4xl sm:text-5xl font-black text-zinc-950">
+                      <span className="font-mono text-3xl sm:text-4xl md:text-5xl font-black text-zinc-950">
                         {telemetry.ppmStabil.toFixed(1)}
                       </span>
-                      <span className="ml-2 font-mono text-xs sm:text-sm font-bold text-zinc-800">PPM</span>
+                      <span className="ml-1.5 sm:ml-2 font-mono text-xs sm:text-sm font-bold text-zinc-800">PPM</span>
                     </div>
                     <div className="text-right font-mono text-xs">
-                      <span className="text-zinc-700 block font-bold">DATA MENTAH</span>
+                      <span className="text-zinc-700 block text-[10px] font-bold">DATA MENTAH</span>
                       <span className="font-extrabold text-amber-800">{telemetry.ppmRaw.toFixed(1)} ppm</span>
                     </div>
                   </div>
-                  <div className="mt-4 pt-4 border-t border-zinc-200 flex flex-col sm:flex-row sm:justify-between gap-1 font-mono text-xs text-zinc-900 font-bold">
+                  <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-zinc-200 flex flex-col xs:flex-row xs:justify-between gap-1 font-mono text-xs text-zinc-900 font-bold">
                     <span>
                       STATUS BACAAN: <strong className="text-emerald-700">Stabil (Tersaring)</strong>
                     </span>
@@ -515,8 +507,8 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Kartu 2: Sinyal Listrik Sensor & Suhu Air */}
-                <div className="rounded-2xl border border-zinc-300 bg-white p-4 sm:p-6 shadow-sm hover:shadow-md transition">
-                  <div className="flex items-center justify-between gap-2 mb-4 border-b border-zinc-200 pb-3">
+                <div className="rounded-2xl border border-zinc-300 bg-white p-3.5 sm:p-5 shadow-xs hover:shadow-sm transition">
+                  <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4 border-b border-zinc-200 pb-2.5 sm:pb-3">
                     <span className="font-mono text-[11px] sm:text-xs font-black tracking-wider text-zinc-900 flex items-center gap-1.5">
                       <Cpu className="h-4 w-4 shrink-0 text-sky-800" />
                       SINYAL LISTRIK SENSOR &amp; SUHU
@@ -527,17 +519,17 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex items-baseline justify-between gap-2">
                     <div>
-                      <span className="font-mono text-4xl sm:text-5xl font-black text-zinc-950">
+                      <span className="font-mono text-3xl sm:text-4xl md:text-5xl font-black text-zinc-950">
                         {telemetry.voltage.toFixed(3)}
                       </span>
-                      <span className="ml-2 font-mono text-xs sm:text-sm font-bold text-zinc-800">VOLT</span>
+                      <span className="ml-1.5 sm:ml-2 font-mono text-xs sm:text-sm font-bold text-zinc-800">VOLT</span>
                     </div>
                     <div className="text-right font-mono text-xs">
-                      <span className="text-zinc-700 block font-bold">BACAAN SENSOR</span>
+                      <span className="text-zinc-700 block text-[10px] font-bold">BACAAN SENSOR</span>
                       <span className="font-extrabold text-zinc-950">{telemetry.adcRaw} / 4095</span>
                     </div>
                   </div>
-                  <div className="mt-4 pt-4 border-t border-zinc-200 flex flex-col sm:flex-row sm:justify-between gap-1 font-mono text-xs text-zinc-900 font-bold">
+                  <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-zinc-200 flex flex-col xs:flex-row xs:justify-between gap-1 font-mono text-xs text-zinc-900 font-bold">
                     <span>
                       SUHU AIR ACUAN: <strong className="text-zinc-950">{telemetry.temperature.toFixed(1)} &deg;C</strong>
                     </span>
@@ -549,8 +541,8 @@ export default function DashboardPage() {
               </div>
 
               {/* Kartu 3: Grafik Perjalanan Nutrisi Air */}
-              <div className="rounded-2xl border border-zinc-300 bg-white p-4 sm:p-6 shadow-sm">
-                <div className="mb-4">
+              <div className="rounded-2xl border border-zinc-300 bg-white p-3.5 sm:p-5 lg:p-6 shadow-xs">
+                <div className="mb-3 sm:mb-4">
                   <h2 className="font-mono text-xs font-black tracking-wider text-zinc-950 uppercase">
                     GRAFIK PERJALANAN NUTRISI AIR
                   </h2>
@@ -663,9 +655,12 @@ export default function DashboardPage() {
                   <p className="text-xs text-zinc-300 mt-0.5 font-semibold">
                     Catatan riwayat kondisi nutrisi dan pompa (data terbaru di atas)
                   </p>
+                  <p className="text-[10px] text-zinc-400 sm:hidden block mt-1 font-sans">
+                    💡 Geser ke samping untuk melihat kolom lainnya &rarr;
+                  </p>
                 </div>
 
-                <div className="overflow-x-auto max-h-96 rounded-xl border border-zinc-800 bg-[#0d0f12]">
+                <div className="overflow-x-auto max-h-96 rounded-xl border border-zinc-800 bg-[#0d0f12] touch-pan-x">
                   <table className="w-full min-w-160 text-left text-xs">
                     <thead className="sticky top-0 bg-[#121418] border-b border-zinc-800 text-zinc-300 font-bold">
                       <tr>
@@ -709,42 +704,6 @@ export default function DashboardPage() {
           )}
         </div>
       </main>
-
-      {/* Bottom Tab Bar Khusus Mode HP */}
-      <nav
-        aria-label="Navigasi bawah mobile"
-        className="fixed bottom-0 inset-x-0 z-30 flex md:hidden items-center justify-around border-t border-zinc-300 bg-white py-1.5 px-2 shadow-lg font-mono"
-      >
-        <button
-          onClick={() => setActiveTab('dashboard')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg text-[10px] font-black transition cursor-pointer ${
-            activeTab === 'dashboard' ? 'bg-emerald-100 text-emerald-950' : 'text-zinc-700'
-          }`}
-        >
-          <Activity className="h-4 w-4" />
-          <span>NUTRISI</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('control')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg text-[10px] font-black transition cursor-pointer ${
-            activeTab === 'control' ? 'bg-emerald-100 text-emerald-950' : 'text-zinc-700'
-          }`}
-        >
-          <Sliders className="h-4 w-4" />
-          <span>KONTROL</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg text-[10px] font-black transition cursor-pointer ${
-            activeTab === 'history' ? 'bg-emerald-100 text-emerald-950' : 'text-zinc-700'
-          }`}
-        >
-          <History className="h-4 w-4" />
-          <span>RIWAYAT</span>
-        </button>
-      </nav>
     </div>
   );
 }
