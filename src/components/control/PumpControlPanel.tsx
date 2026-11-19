@@ -12,8 +12,7 @@ import {
   Loader2, 
   Sliders, 
   Settings2, 
-  ChevronDown, 
-  ChevronUp, 
+  ChevronDown,
   Info 
 } from 'lucide-react';
 
@@ -44,14 +43,14 @@ export function PumpControlPanel({
 }: PumpControlPanelProps) {
   const [successMsg, setSuccessMsg] = useState('');
   
-  // State dropdown buka-tutup (accordion) untuk masing-masing menu kontrol
+  // Default SEMUA dropdown tertutup rapi saat halaman dibuka
   const [openDropdowns, setOpenDropdowns] = useState<{
     mode: boolean;
     switch: boolean;
     target: boolean;
   }>({
-    mode: true,
-    switch: true,
+    mode: false,
+    switch: false,
     target: false,
   });
 
@@ -93,8 +92,8 @@ export function PumpControlPanel({
     setPendingMode(newMode);
     try {
       await onUpdateControl({ mode: newMode });
-      showNotification(`MODE BERGANTI: ${newMode === 'auto' ? 'OTOMATIS (AUTO)' : 'MANUAL (TOMBOL)'}`);
-      // Jika beralih ke manual, otomatis buka dropdown saklar agar tombol langsung terlihat
+      showNotification(`MODE BERGANTI: ${newMode === 'auto' ? 'OTOMATIS (SENSOR)' : 'MANUAL (SAKLAR)'}`);
+      // Jika user memilih manual, otomatis buka dropdown saklar secara dinamis agar tombol langsung tampil
       if (newMode === 'manual') {
         setOpenDropdowns((prev) => ({ ...prev, switch: true }));
       }
@@ -156,32 +155,32 @@ export function PumpControlPanel({
     : `${remainingSecs}s`;
 
   return (
-    <div className="rounded-2xl border border-zinc-300 bg-white p-4 sm:p-6 shadow-sm space-y-4">
+    <div className="rounded-2xl border border-zinc-300 bg-white p-4 sm:p-6 shadow-sm space-y-4 font-sans">
       {/* Header Utama Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-zinc-200 pb-4">
         <div>
-          <h2 className="font-mono text-xs font-black tracking-wider text-zinc-950 uppercase flex items-center gap-1.5">
+          <h2 className="text-xs font-black tracking-wider text-zinc-950 uppercase flex items-center gap-1.5 font-mono">
             <Sliders className="h-4 w-4 text-emerald-800" />
             PENGATURAN &amp; SAKLAR POMPA
           </h2>
-          <p className="font-mono text-xs font-bold text-zinc-600 mt-0.5">
-            Kelola cara kerja, tombol saklar manual, dan target nutrisi
+          <p className="text-xs font-semibold text-zinc-600 mt-0.5">
+            Kelola mode operasi, kendali saklar, dan target nutrisi
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`px-2.5 py-1 rounded-md font-mono text-[11px] font-black border transition-all duration-300 ${
+          <span className={`px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold border transition-all duration-300 ${
             control.pump_mode === 'auto'
-              ? 'bg-emerald-100 text-emerald-950 border-emerald-400' 
+              ? 'bg-emerald-50 text-emerald-950 border-emerald-300' 
               : 'bg-zinc-800 text-white border-zinc-900'
           }`}>
-            {control.pump_mode === 'auto' ? 'MODE: OTOMATIS' : 'MODE: MANUAL'}
+            {control.pump_mode === 'auto' ? 'Mode: Otomatis' : 'Mode: Manual'}
           </span>
-          <span className={`px-2.5 py-1 rounded-md font-mono text-[11px] font-black border shadow-xs transition-all duration-300 ${
+          <span className={`px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold border shadow-xs transition-all duration-300 ${
             isSwitchActive 
               ? 'bg-emerald-600 text-white border-emerald-700' 
               : 'bg-zinc-100 text-zinc-800 border-zinc-300'
           }`}>
-            {isSwitchActive ? '● POMPA AKTIF (ON)' : '○ POMPA MATI (OFF)'}
+            {isSwitchActive ? '● Pompa ON' : '○ Pompa OFF'}
           </span>
         </div>
       </div>
@@ -195,97 +194,93 @@ export function PumpControlPanel({
       )}
 
       {/* =========================================================================
-          DROPDOWN 1: CARA KERJA POMPA (MODE OTOMATIS VS MANUAL)
+          SECTION 1: MODE OPERASI
          ========================================================================= */}
-      <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 overflow-hidden shadow-2xs transition-all duration-200">
+      <div className="rounded-2xl border border-zinc-200/90 bg-white hover:border-zinc-300 transition-all duration-200 shadow-xs overflow-hidden">
         <button
           type="button"
           onClick={() => toggleDropdown('mode')}
-          className="w-full flex items-center justify-between p-3.5 sm:p-4 text-left hover:bg-zinc-100/80 active:bg-zinc-200/60 transition-colors cursor-pointer"
+          className="w-full flex items-center justify-between p-3.5 sm:p-4 text-left hover:bg-zinc-50/80 active:bg-zinc-100/60 transition-colors cursor-pointer select-none"
         >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="p-1.5 rounded-lg bg-emerald-100 text-emerald-900 border border-emerald-200 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="h-9 w-9 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200/70 flex items-center justify-center shrink-0">
               <Zap className="h-4 w-4" />
             </span>
             <div className="min-w-0">
-              <span className="font-mono text-xs font-black text-zinc-950 uppercase tracking-wide block truncate">
-                1. Mode Operasi Pompa
+              <span className="text-xs font-extrabold text-zinc-950 tracking-tight block truncate">
+                Mode Operasi
               </span>
-              <span className="text-[11px] text-zinc-500 font-semibold block truncate">
-                Pilih kontrol otomatis sensor atau manual
+              <span className="text-[11px] text-zinc-500 font-medium block truncate">
+                Otomatis (Sensor TDS) atau Manual (Saklar)
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+          <div className="flex items-center gap-2.5 shrink-0 pl-2">
+            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border ${
               control.pump_mode === 'auto'
-                ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
+                ? 'bg-emerald-50 text-emerald-950 border-emerald-300'
                 : 'bg-zinc-800 text-white border-zinc-900'
             }`}>
               {control.pump_mode === 'auto' ? 'OTOMATIS' : 'MANUAL'}
             </span>
-            {openDropdowns.mode ? (
-              <ChevronUp className="h-4 w-4 text-zinc-600" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-zinc-600" />
-            )}
+            <ChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-200 ${openDropdowns.mode ? 'rotate-180' : ''}`} />
           </div>
         </button>
 
         {openDropdowns.mode && (
-          <div className="p-3.5 sm:p-4 border-t border-zinc-200 bg-white space-y-3.5 font-mono animate-in fade-in duration-150">
-            <p className="text-xs text-zinc-700 font-semibold leading-relaxed">
-              Pilih <strong>Otomatis</strong> agar pompa menyiram nutrisi secara cerdas sesuai kadar PPM sensor TDS, atau <strong>Manual</strong> untuk mengendalikan tombol saklar sendiri.
+          <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 space-y-3.5 animate-in fade-in duration-200">
+            <p className="text-xs text-zinc-600 leading-relaxed font-medium">
+              Pilih cara kerja pompa: berjalan otomatis mengikuti bacaan sensor nutrisi, atau kendalikan manual lewat tombol saklar.
             </p>
 
-            <div className="grid grid-cols-2 gap-2.5 pt-1">
+            <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
                 onClick={() => handleToggleMode('auto')}
                 disabled={pendingMode !== null || pendingPumpState !== null}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-black rounded-xl border transition-all duration-200 cursor-pointer active:scale-[0.99] ${
+                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-bold rounded-xl border transition-all duration-200 cursor-pointer active:scale-[0.98] ${
                   control.pump_mode === 'auto'
-                    ? 'bg-emerald-700 border-emerald-800 text-white shadow-sm ring-2 ring-emerald-500/30'
-                    : 'bg-zinc-50 border-zinc-300 text-zinc-900 hover:bg-zinc-100'
+                    ? 'bg-emerald-700 border-emerald-800 text-white shadow-sm ring-2 ring-emerald-500/25'
+                    : 'bg-white border-zinc-300 text-zinc-800 hover:bg-zinc-50'
                 } ${pendingMode === 'auto' ? 'opacity-85' : ''}`}
               >
                 {pendingMode === 'auto' ? (
                   <>
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    MEMPROSES...
+                    Memproses...
                   </>
                 ) : (
-                  'OTOMATIS (SENSOR)'
+                  'Otomatis (Sensor)'
                 )}
               </button>
               <button
                 type="button"
                 onClick={() => handleToggleMode('manual')}
                 disabled={pendingMode !== null || pendingPumpState !== null}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-black rounded-xl border transition-all duration-200 cursor-pointer active:scale-[0.99] ${
+                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-bold rounded-xl border transition-all duration-200 cursor-pointer active:scale-[0.98] ${
                   control.pump_mode === 'manual'
-                    ? 'bg-zinc-900 border-zinc-950 text-white shadow-sm ring-2 ring-zinc-700/30'
-                    : 'bg-zinc-50 border-zinc-300 text-zinc-900 hover:bg-zinc-100'
+                    ? 'bg-zinc-900 border-zinc-950 text-white shadow-sm ring-2 ring-zinc-700/25'
+                    : 'bg-white border-zinc-300 text-zinc-800 hover:bg-zinc-50'
                 } ${pendingMode === 'manual' ? 'opacity-85' : ''}`}
               >
                 {pendingMode === 'manual' ? (
                   <>
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    MEMPROSES...
+                    Memproses...
                   </>
                 ) : (
-                  'MANUAL (TOMBOL)'
+                  'Manual (Tombol)'
                 )}
               </button>
             </div>
 
-            {/* Banner Status Mode Auto / Cooldown */}
+            {/* Status Operasi Otomatis */}
             {control.pump_mode === 'auto' && (
-              <div className={`flex items-center justify-between gap-2.5 rounded-xl border px-3.5 py-2.5 text-xs font-bold transition-all ${
+              <div className={`flex items-center justify-between gap-2.5 rounded-xl border p-3 text-xs font-medium transition-all ${
                 isInCooldown
-                  ? 'border-amber-400 bg-amber-50 text-amber-950'
-                  : 'border-emerald-300 bg-emerald-50 text-emerald-950'
+                  ? 'border-amber-300 bg-amber-50 text-amber-950'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-950'
               }`}>
                 <div className="flex items-center gap-2">
                   {isInCooldown ? (
@@ -295,7 +290,7 @@ export function PumpControlPanel({
                   )}
                   <span>
                     {isInCooldown
-                      ? `Jeda Cooldown Aktif (Sisa jeda: ${remainingTimeStr})`
+                      ? `Jeda Cooldown Aktif (Sisa: ${remainingTimeStr})`
                       : `Sistem Siap \u2022 Pompa ON di < ${control.target_ppm_min} PPM \u2022 OFF di >= ${control.target_ppm_max} PPM`}
                   </span>
                 </div>
@@ -306,52 +301,48 @@ export function PumpControlPanel({
       </div>
 
       {/* =========================================================================
-          DROPDOWN 2: SAKLAR POMPA MANUAL (TOMBOL HANYA MUNCUL DI MODE MANUAL)
+          SECTION 2: SAKLAR POMPA (TOMBOL DINAMIS HANYA MUNCUL DI MODE MANUAL)
          ========================================================================= */}
-      <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 overflow-hidden shadow-2xs transition-all duration-200">
+      <div className="rounded-2xl border border-zinc-200/90 bg-white hover:border-zinc-300 transition-all duration-200 shadow-xs overflow-hidden">
         <button
           type="button"
           onClick={() => toggleDropdown('switch')}
-          className="w-full flex items-center justify-between p-3.5 sm:p-4 text-left hover:bg-zinc-100/80 active:bg-zinc-200/60 transition-colors cursor-pointer"
+          className="w-full flex items-center justify-between p-3.5 sm:p-4 text-left hover:bg-zinc-50/80 active:bg-zinc-100/60 transition-colors cursor-pointer select-none"
         >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="p-1.5 rounded-lg bg-blue-100 text-blue-900 border border-blue-200 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="h-9 w-9 rounded-xl bg-blue-50 text-blue-800 border border-blue-200/70 flex items-center justify-center shrink-0">
               <Power className="h-4 w-4" />
             </span>
             <div className="min-w-0">
-              <span className="font-mono text-xs font-black text-zinc-950 uppercase tracking-wide block truncate">
-                2. Saklar Pompa Manual
+              <span className="text-xs font-extrabold text-zinc-950 tracking-tight block truncate">
+                Saklar Pompa
               </span>
-              <span className="text-[11px] text-zinc-500 font-semibold block truncate">
-                {isManual ? 'Tombol kontrol langsung ON/OFF' : 'Hanya aktif di Mode Manual'}
+              <span className="text-[11px] text-zinc-500 font-medium block truncate">
+                {isManual ? 'Kendali tombol daya listrik pompa' : 'Terkunci otomatis oleh sensor'}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+          <div className="flex items-center gap-2.5 shrink-0 pl-2">
+            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border ${
               isManual
-                ? (isSwitchActive ? 'bg-emerald-100 text-emerald-950 border-emerald-300' : 'bg-zinc-200 text-zinc-900 border-zinc-400')
-                : 'bg-zinc-100 text-zinc-600 border-zinc-300'
+                ? (isSwitchActive ? 'bg-emerald-50 text-emerald-950 border-emerald-300' : 'bg-zinc-100 text-zinc-800 border-zinc-300')
+                : 'bg-zinc-100 text-zinc-500 border-zinc-200'
             }`}>
               {isManual 
                 ? (isSwitchActive ? 'POMPA ON' : 'POMPA OFF')
-                : 'DISEMBUNYIKAN (AUTO)'}
+                : 'MODE OTOMATIS'}
             </span>
-            {openDropdowns.switch ? (
-              <ChevronUp className="h-4 w-4 text-zinc-600" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-zinc-600" />
-            )}
+            <ChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-200 ${openDropdowns.switch ? 'rotate-180' : ''}`} />
           </div>
         </button>
 
         {openDropdowns.switch && (
-          <div className="p-3.5 sm:p-4 border-t border-zinc-200 bg-white space-y-3 font-mono animate-in fade-in duration-150">
+          <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 space-y-3.5 animate-in fade-in duration-200">
             {/* JIKA MODE MANUAL: TAMPILKAN TOMBOL SAKLAR */}
             {isManual ? (
-              <>
-                <div className="flex items-center justify-between font-mono text-xs bg-zinc-50 p-2.5 rounded-xl border border-zinc-200">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between font-mono text-xs bg-white p-3 rounded-xl border border-zinc-200 shadow-2xs">
                   <div className="flex items-center gap-2">
                     <span className={`h-2.5 w-2.5 rounded-full transition-colors duration-300 ${
                       pendingPumpState !== null 
@@ -377,17 +368,17 @@ export function PumpControlPanel({
                       </strong>
                     </span>
                   </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
                     pendingPumpState !== null
-                      ? 'text-amber-900 bg-amber-100 border-amber-300'
-                      : 'text-emerald-800 bg-emerald-100 border-emerald-300'
+                      ? 'text-amber-900 bg-amber-50 border-amber-300'
+                      : 'text-emerald-800 bg-emerald-50 border-emerald-300'
                   }`}>
                     {pendingPumpState !== null ? 'Mengirim...' : 'Tersinkron'}
                   </span>
                 </div>
 
-                {/* 1 Tombol Saklar Utama */}
-                <div className="pt-1">
+                {/* Tombol Saklar Pompa Dinamis */}
+                <div>
                   {pendingPumpState !== null ? (
                     <button
                       type="button"
@@ -399,14 +390,14 @@ export function PumpControlPanel({
                       }`}
                     >
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      {pendingPumpState ? 'MENYALAKAN POMPA...' : 'MEMATIKAN POMPA...'}
+                      {pendingPumpState ? 'Menyalakan Pompa...' : 'Mematikan Pompa...'}
                     </button>
                   ) : isSwitchActive ? (
                     <button
                       type="button"
                       disabled={pendingMode !== null || isSavingConfig}
                       onClick={() => handleTogglePumpState(false)}
-                      className="w-full flex items-center justify-center gap-2 py-3 px-4 text-xs sm:text-sm font-black rounded-xl border border-rose-700 bg-rose-600 hover:bg-rose-700 text-white shadow-sm ring-2 ring-rose-500/30 transition-all duration-200 cursor-pointer active:scale-[0.99]"
+                      className="w-full flex items-center justify-center gap-2 py-3.5 px-4 text-xs sm:text-sm font-extrabold rounded-xl border border-rose-700 bg-rose-600 hover:bg-rose-700 text-white shadow-sm ring-2 ring-rose-500/25 transition-all duration-200 cursor-pointer active:scale-[0.98]"
                     >
                       <Power className="h-4 w-4" />
                       MATIKAN POMPA (OFF)
@@ -416,43 +407,45 @@ export function PumpControlPanel({
                       type="button"
                       disabled={pendingMode !== null || isSavingConfig}
                       onClick={() => handleTogglePumpState(true)}
-                      className="w-full flex items-center justify-center gap-2 py-3 px-4 text-xs sm:text-sm font-black rounded-xl border border-emerald-700 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/30 transition-all duration-200 cursor-pointer active:scale-[0.99]"
+                      className="w-full flex items-center justify-center gap-2 py-3.5 px-4 text-xs sm:text-sm font-extrabold rounded-xl border border-emerald-700 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/25 transition-all duration-200 cursor-pointer active:scale-[0.98]"
                     >
                       <Power className="h-4 w-4" />
                       NYALAKAN POMPA (ON)
                     </button>
                   )}
-                  <p className="text-[10px] font-semibold text-zinc-600 text-center mt-2">
+                  <p className="text-[11px] font-medium text-zinc-500 text-center mt-2">
                     {pendingPumpState !== null
-                      ? (pendingPumpState ? 'Sedang mengirim sinyal aktivasi ke pompa...' : 'Sedang mengirim sinyal mati ke pompa...')
+                      ? 'Sedang mengirim sinyal ke modul ESP32...'
                       : isSwitchActive 
-                        ? '● Pompa sedang AKTIF — Tekan tombol merah untuk mematikan' 
-                        : '○ Pompa sedang MATI — Tekan tombol hijau untuk menyalakan'}
+                        ? '● Pompa sedang aktif — Tekan tombol untuk mematikan' 
+                        : '○ Pompa dalam kondisi mati — Tekan tombol untuk menyalakan'}
                   </p>
                 </div>
-              </>
+              </div>
             ) : (
-              /* JIKA MODE OTOMATIS: TOMBOL TIDAK MUNCUL */
-              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-center space-y-2.5">
-                <div className="inline-flex items-center justify-center p-2 rounded-full bg-emerald-100 text-emerald-800">
+              /* JIKA MODE OTOMATIS: TAMPILKAN PENJELASAN DINAMIS, TOMBOL SAKLAR TIDAK TAMPIL */
+              <div className="rounded-xl border border-zinc-200 bg-white p-4 text-center space-y-3">
+                <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/60">
                   <Info className="h-5 w-5" />
                 </div>
-                <div>
-                  <h4 className="text-xs font-black text-zinc-950 uppercase">
-                    Mode Otomatis Sedang Berjalan
+                <div className="space-y-1">
+                  <h4 className="text-xs font-bold text-zinc-950">
+                    Pompa Berjalan Otomatis
                   </h4>
-                  <p className="text-xs text-zinc-600 font-semibold mt-1 max-w-md mx-auto leading-relaxed">
+                  <p className="text-xs text-zinc-600 max-w-md mx-auto leading-relaxed">
                     Tombol saklar disembunyikan karena pompa sedang dikontrol otomatis oleh sensor TDS berdasarkan Target Min ({control.target_ppm_min} PPM) dan Target Max ({control.target_ppm_max} PPM).
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleMode('manual')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg border border-zinc-800 bg-zinc-900 text-white hover:bg-zinc-800 active:scale-95 transition cursor-pointer"
-                >
-                  <Power className="h-3.5 w-3.5" />
-                  Aktifkan Mode Manual
-                </button>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleMode('manual')}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl border border-zinc-800 bg-zinc-900 text-white hover:bg-zinc-800 active:scale-95 transition cursor-pointer shadow-2xs"
+                  >
+                    <Power className="h-3.5 w-3.5" />
+                    Beralih ke Mode Manual
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -460,51 +453,47 @@ export function PumpControlPanel({
       </div>
 
       {/* =========================================================================
-          DROPDOWN 3: PENGATURAN TARGET PPM & COOLDOWN TIME
+          SECTION 3: TARGET PPM & COOLDOWN
          ========================================================================= */}
-      <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 overflow-hidden shadow-2xs transition-all duration-200">
+      <div className="rounded-2xl border border-zinc-200/90 bg-white hover:border-zinc-300 transition-all duration-200 shadow-xs overflow-hidden">
         <button
           type="button"
           onClick={() => toggleDropdown('target')}
-          className="w-full flex items-center justify-between p-3.5 sm:p-4 text-left hover:bg-zinc-100/80 active:bg-zinc-200/60 transition-colors cursor-pointer"
+          className="w-full flex items-center justify-between p-3.5 sm:p-4 text-left hover:bg-zinc-50/80 active:bg-zinc-100/60 transition-colors cursor-pointer select-none"
         >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="p-1.5 rounded-lg bg-amber-100 text-amber-900 border border-amber-200 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="h-9 w-9 rounded-xl bg-amber-50 text-amber-800 border border-amber-200/70 flex items-center justify-center shrink-0">
               <Settings2 className="h-4 w-4" />
             </span>
             <div className="min-w-0">
-              <span className="font-mono text-xs font-black text-zinc-950 uppercase tracking-wide block truncate">
-                3. Target PPM &amp; Cooldown
+              <span className="text-xs font-extrabold text-zinc-950 tracking-tight block truncate">
+                Target PPM &amp; Cooldown
               </span>
-              <span className="text-[11px] text-zinc-500 font-semibold block truncate">
-                Min: {control.target_ppm_min} PPM &bull; Max: {control.target_ppm_max} PPM &bull; Jeda: {control.cooldown_minutes} Mnt
+              <span className="text-[11px] text-zinc-500 font-medium block truncate">
+                Min: {control.target_ppm_min} &bull; Max: {control.target_ppm_max} PPM &bull; Jeda: {control.cooldown_minutes} Mnt
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0 pl-2">
             {isDirty && (
-              <span className="text-[10px] font-mono font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
-                DRAFT EDIT
+              <span className="text-[10px] font-mono font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-300">
+                BELUM DISIMPAN
               </span>
             )}
-            {openDropdowns.target ? (
-              <ChevronUp className="h-4 w-4 text-zinc-600" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-zinc-600" />
-            )}
+            <ChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-200 ${openDropdowns.target ? 'rotate-180' : ''}`} />
           </div>
         </button>
 
         {openDropdowns.target && (
-          <div className="p-3.5 sm:p-4 border-t border-zinc-200 bg-white space-y-4 font-mono animate-in fade-in duration-150">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-zinc-100 pb-3">
+          <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 space-y-4 animate-in fade-in duration-200 font-mono">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-zinc-200/60 pb-3">
               <div>
                 <span className="text-xs font-black text-zinc-950 uppercase block">
-                  KONFIGURASI AMBANG BATAS OTOMATIS
+                  KONFIGURASI BATAS NUTRISI
                 </span>
-                <p className="text-[11px] text-zinc-500 font-semibold mt-0.5">
-                  Pompa menyala otomatis jika PPM &lt; Min, dan mati saat &gt;= Max
+                <p className="text-[11px] text-zinc-500 font-semibold mt-0.5 font-sans">
+                  Pompa menyala saat PPM &lt; Min, dan mati saat &gt;= Max
                 </p>
               </div>
 
@@ -549,7 +538,7 @@ export function PumpControlPanel({
                   />
                   <span className="text-xs font-bold text-zinc-700 ml-2">PPM</span>
                 </div>
-                <span className="text-[10px] text-zinc-600 font-semibold block">Pompa ON otomatis saat PPM &lt; angka ini</span>
+                <span className="text-[10px] text-zinc-600 font-semibold block">Pompa ON jika PPM &lt; angka ini</span>
               </div>
 
               <div className="space-y-1">
@@ -568,11 +557,11 @@ export function PumpControlPanel({
                   />
                   <span className="text-xs font-bold text-zinc-700 ml-2">PPM</span>
                 </div>
-                <span className="text-[10px] text-zinc-600 font-semibold block">Pompa OFF otomatis saat PPM &gt;= angka ini</span>
+                <span className="text-[10px] text-zinc-600 font-semibold block">Pompa OFF jika PPM &gt;= angka ini</span>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-800 uppercase block">Cooldown Time (Jeda Istirahat)</label>
+                <label className="text-[10px] font-bold text-zinc-800 uppercase block">Cooldown Time (Jeda)</label>
                 <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
                   <input
                     type="number"
@@ -587,7 +576,7 @@ export function PumpControlPanel({
                   />
                   <span className="text-xs font-bold text-zinc-700 ml-2">MENIT</span>
                 </div>
-                <span className="text-[10px] text-zinc-600 font-semibold block">Jeda tunggu agar nutrisi larut merata</span>
+                <span className="text-[10px] text-zinc-600 font-semibold block">Jeda tunggu agar larut merata</span>
               </div>
             </div>
           </div>
