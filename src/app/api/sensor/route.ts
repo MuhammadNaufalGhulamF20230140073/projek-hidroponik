@@ -20,9 +20,9 @@ export async function GET() {
     let is_in_cooldown = false;
     let cooldown_remaining_seconds = 0;
     const isCooldownEnabled = control.cooldown_enabled !== false;
-    const cooldownTotalSeconds = (control.cooldown_minutes || 60) * 60;
-    const maxCycles = control.cooldown_max_cycles || 1;
-    const currentCycles = control.cycle_count || 0;
+    const cooldownTotalSeconds = Math.max(1, (control.cooldown_minutes || 60)) * 60;
+    const maxCycles = Math.max(1, control.cooldown_max_cycles || 1);
+    let currentCycles = control.cycle_count || 0;
 
     if (isCooldownEnabled) {
       const windowStartMs = control.window_started_at
@@ -30,12 +30,15 @@ export async function GET() {
         : (control.last_dosing_at ? new Date(control.last_dosing_at).getTime() : 0);
 
       if (windowStartMs > 0) {
-        const elapsedSeconds = Math.round((nowServer - windowStartMs) / 1000);
+        const elapsedSeconds = Math.max(0, Math.round((nowServer - windowStartMs) / 1000));
         if (elapsedSeconds < cooldownTotalSeconds) {
           if (currentCycles >= maxCycles) {
             is_in_cooldown = true;
             cooldown_remaining_seconds = cooldownTotalSeconds - elapsedSeconds;
           }
+        } else {
+          // Jendela waktu jeda sudah selesai, jatah siklus kembali segar (0 terpakai)
+          currentCycles = 0;
         }
       }
     }

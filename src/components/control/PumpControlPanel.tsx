@@ -36,7 +36,8 @@ interface PumpControlPanelProps {
     cooldown_minutes?: number;
     cooldown_enabled?: boolean;
     cooldown_max_cycles?: number;
-  }) => Promise<void> | void;
+    reset_cooldown?: boolean;
+  }) => Promise<any> | void;
 }
 
 export function PumpControlPanel({
@@ -135,6 +136,8 @@ export function PumpControlPanel({
           ? `PENGATURAN DISIMPAN: COOLDOWN ${valCd}m (${valCycles}x per jeda)`
           : `PENGATURAN DISIMPAN: TANPA COOLDOWN (BEBAS ATURAN)`
       );
+    } catch (err: any) {
+      alert(`Gagal menyimpan pengaturan: ${err?.message || 'Terjadi kesalahan sistem'}`);
     } finally {
       setIsSavingConfig(false);
     }
@@ -166,7 +169,29 @@ export function PumpControlPanel({
             Pilih mode operasi untuk mengontrol pompa air hidroponik
           </p>
         </div>
-        <div className="flex items-center gap-2 self-start xs:self-auto">
+        <div className="flex flex-col items-start xs:items-end gap-1 self-start xs:self-auto shrink-0">
+          {/* Indikator Realtime Sisa Waktu Cooldown & Jatah Terpakai di Atas Pompa ON/OFF (Kecil Rapi) */}
+          <div className="flex items-center gap-1.5 font-mono text-[10px] font-bold">
+            {cooldownEnabled ? (
+              <>
+                <span className={`px-1.5 py-0.5 rounded border ${
+                  isCdActive 
+                    ? 'bg-amber-100 text-amber-950 border-amber-300 animate-pulse' 
+                    : 'bg-zinc-100 text-zinc-600 border-zinc-200'
+                }`}>
+                  {isCdActive ? `⏳ ${remainingTimeStr}` : '⏱️ SIAP'}
+                </span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-900 border border-emerald-200">
+                  JATAH: {cooldownInfo?.current_cycles ?? 0}/{cooldownInfo?.max_cycles ?? 1}x
+                </span>
+              </>
+            ) : (
+              <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-900 border border-sky-200">
+                BEBAS JEDA (0 ATURAN)
+              </span>
+            )}
+          </div>
+
           <span className={`px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold border transition-all duration-300 ${
             isSwitchActive 
               ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs' 

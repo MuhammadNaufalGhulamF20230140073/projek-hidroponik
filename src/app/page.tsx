@@ -186,9 +186,12 @@ export default function DashboardPage() {
 
         if (sensorData.cooldown) {
           setCooldown({
+            enabled: Boolean(sensorData.cooldown.enabled !== false),
             is_in_cooldown: Boolean(sensorData.cooldown.is_in_cooldown),
             remaining_seconds: Number(sensorData.cooldown.remaining_seconds || 0),
             remaining_minutes: Number(sensorData.cooldown.remaining_minutes || 0),
+            max_cycles: Number(sensorData.cooldown.max_cycles ?? 1),
+            current_cycles: Number(sensorData.cooldown.current_cycles ?? 0),
           });
         }
 
@@ -266,6 +269,7 @@ export default function DashboardPage() {
       setCooldown((prev) => {
         if (!prev.is_in_cooldown || prev.remaining_seconds <= 1) {
           return {
+            ...prev,
             is_in_cooldown: false,
             remaining_seconds: 0,
             remaining_minutes: 0,
@@ -273,6 +277,7 @@ export default function DashboardPage() {
         }
         const nextSec = prev.remaining_seconds - 1;
         return {
+          ...prev,
           is_in_cooldown: true,
           remaining_seconds: nextSec,
           remaining_minutes: Math.ceil(nextSec / 60),
@@ -308,16 +313,21 @@ export default function DashboardPage() {
     target_ppm_min?: number;
     target_ppm_max?: number;
     cooldown_minutes?: number;
+    cooldown_enabled?: boolean;
+    cooldown_max_cycles?: number;
+    reset_cooldown?: boolean;
   }) => {
     lastControlUpdateRef.current = Date.now();
 
-    const optimisticState = {
+    const optimisticState: SystemControl = {
       ...controlState,
       ...(params.mode !== undefined && { pump_mode: params.mode }),
       ...(params.state !== undefined && { pump_state: params.state }),
       ...(params.target_ppm_min !== undefined && { target_ppm_min: params.target_ppm_min }),
       ...(params.target_ppm_max !== undefined && { target_ppm_max: params.target_ppm_max }),
       ...(params.cooldown_minutes !== undefined && { cooldown_minutes: params.cooldown_minutes }),
+      ...(params.cooldown_enabled !== undefined && { cooldown_enabled: params.cooldown_enabled }),
+      ...(params.cooldown_max_cycles !== undefined && { cooldown_max_cycles: params.cooldown_max_cycles }),
     };
 
     setControlState(optimisticState);
@@ -336,9 +346,21 @@ export default function DashboardPage() {
           ...prev,
           actualPumpActive: Boolean(data.control.pump_state),
         }));
+        if (data.control.cooldown_enabled !== undefined) {
+          setCooldown((prev) => ({
+            ...prev,
+            enabled: Boolean(data.control.cooldown_enabled !== false),
+            max_cycles: Number(data.control.cooldown_max_cycles ?? prev.max_cycles ?? 1),
+            current_cycles: Number(data.control.cycle_count ?? prev.current_cycles ?? 0),
+          }));
+        }
+        return data.control;
+      } else {
+        throw new Error(data.error || 'Gagal memperbarui konfigurasi');
       }
-    } catch {
-      // Tetap pertahankan state optimis dan biarkan polling menyinkronkan ulang
+    } catch (err) {
+      console.error('handleUpdateControl error:', err);
+      throw err;
     }
 
     if (params.state !== undefined) {
@@ -354,8 +376,8 @@ export default function DashboardPage() {
         voltage: `${telemetry.voltage.toFixed(3)} V`,
         ppm_raw: telemetry.ppmRaw,
         ppm_filtered: telemetry.ppmStabil,
-        relay: params.state ? 'MENYALA' : 'MATI',
-        is_active: params.state,
+        relay: Boolean(params.state) ? 'MENYALA' : 'MATI',
+        is_active: Boolean(params.state),
       };
 
       setLogs((prevLogs) => [newLogItem, ...prevLogs]);
@@ -424,9 +446,26 @@ export default function DashboardPage() {
 
           {/* Sisi Kanan: Status Koneksi & Tombol Refresh */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            {cooldown.is_in_cooldown && cooldown.enabled !== false && (
-              <span className="hidden lg:inline-flex text-[10px] font-mono font-bold text-amber-800 bg-amber-50 px-2 py-1 rounded-md border border-amber-300">
-                JEDA: {Math.floor(cooldown.remaining_seconds / 60)}m {(cooldown.remaining_seconds % 60).toString().padStart(2, '0')}s
+            {cooldown.enabled !== false ? (
+              <span className={`inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-1 rounded-md border ${
+                cooldown.is_in_cooldown
+                  ? 'text-amber-900 bg-amber-50 border-amber-300 animate-pulse'
+                  : 'text-zinc-600 bg-zinc-50 border-zinc-200'
+              }`}>
+                {cooldown.is_in_cooldown ? (
+                  <>
+                    <span>⏳ JEDA:</span>
+                    <span>
+                      {Math.floor(cooldown.remaining_seconds / 60)}m {(cooldown.remaining_seconds % 60).toString().padStart(2, '0')}s
+                    </span>
+                  </>
+                ) : (
+                  <span>⏱️ JEDA SIAP</span>
+                )}
+              </span>
+            ) : (
+              <span className="hidden sm:inline-flex text-[10px] font-mono font-bold text-sky-800 bg-sky-50 px-2 py-1 rounded-md border border-sky-200">
+                BEBAS JEDA
               </span>
             )}
 
@@ -477,15 +516,42 @@ export default function DashboardPage() {
                       <Droplets className="h-4 w-4 text-emerald-700" />
                       KADAR NUTRISI AIR (TDS)
                     </span>
-                    <span className={`shrink-0 rounded px-2 py-0.5 font-mono text-[10px] font-bold border transition-colors duration-300 ${
-                      (controlState.pump_mode === 'manual' ? Boolean(controlState.pump_state) : telemetry.actualPumpActive)
-                        ? 'bg-emerald-100 text-emerald-950 border-emerald-400'
-                        : 'bg-zinc-100 text-zinc-800 border-zinc-300'
-                    }`}>
-                      {(controlState.pump_mode === 'manual' ? Boolean(controlState.pump_state) : telemetry.actualPumpActive)
-                        ? 'POMPA MENYALA'
-                        : 'POMPA STANDBY'}
-                    </span>
+                    
+                    {/* Status Pompa & Jatah/Cooldown di atasnya (Kecil Rapi) */}
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <div className="flex items-center gap-1 font-mono text-[9px] font-bold">
+                        {cooldown.enabled !== false ? (
+                          <>
+                            <span className={`px-1.5 py-0.5 rounded border ${
+                              cooldown.is_in_cooldown 
+                                ? 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse' 
+                                : 'bg-zinc-100 text-zinc-600 border-zinc-200'
+                            }`}>
+                              {cooldown.is_in_cooldown 
+                                ? `⏳ ${Math.floor(cooldown.remaining_seconds / 60)}m ${(cooldown.remaining_seconds % 60).toString().padStart(2, '0')}s` 
+                                : '⏱️ JEDA SIAP'}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              JATAH: {cooldown.current_cycles ?? 0}/{cooldown.max_cycles ?? 1}x
+                            </span>
+                          </>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200">
+                            BEBAS JEDA
+                          </span>
+                        )}
+                      </div>
+
+                      <span className={`shrink-0 rounded px-2 py-0.5 font-mono text-[10px] font-bold border transition-colors duration-300 ${
+                        (controlState.pump_mode === 'manual' ? Boolean(controlState.pump_state) : telemetry.actualPumpActive)
+                          ? 'bg-emerald-100 text-emerald-950 border-emerald-400'
+                          : 'bg-zinc-100 text-zinc-800 border-zinc-300'
+                      }`}>
+                        {(controlState.pump_mode === 'manual' ? Boolean(controlState.pump_state) : telemetry.actualPumpActive)
+                          ? 'POMPA MENYALA'
+                          : 'POMPA STANDBY'}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-baseline justify-between gap-2">
                     <div>

@@ -57,31 +57,36 @@ async function ensureSchemaUpdated() {
         target_ppm_min REAL NOT NULL DEFAULT 560.0,
         target_ppm_max REAL NOT NULL DEFAULT 840.0,
         cooldown_minutes INTEGER NOT NULL DEFAULT 60,
+        cooldown_enabled BOOLEAN NOT NULL DEFAULT true,
+        cooldown_max_cycles INTEGER NOT NULL DEFAULT 1,
+        cycle_count INTEGER NOT NULL DEFAULT 0,
+        window_started_at TIMESTAMP WITH TIME ZONE,
         last_dosing_at TIMESTAMP WITH TIME ZONE,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
     `);
+
+    // Tambahkan kolom mutakhir secara terisolasi (idempotent)
+    const alterQueries = [
+      `ALTER TABLE system_control ADD COLUMN IF NOT EXISTS cooldown_minutes INTEGER NOT NULL DEFAULT 60`,
+      `ALTER TABLE system_control ADD COLUMN IF NOT EXISTS cooldown_enabled BOOLEAN NOT NULL DEFAULT true`,
+      `ALTER TABLE system_control ADD COLUMN IF NOT EXISTS cooldown_max_cycles INTEGER NOT NULL DEFAULT 1`,
+      `ALTER TABLE system_control ADD COLUMN IF NOT EXISTS cycle_count INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE system_control ADD COLUMN IF NOT EXISTS window_started_at TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE system_control ADD COLUMN IF NOT EXISTS last_dosing_at TIMESTAMP WITH TIME ZONE`
+    ];
+
+    for (const sql of alterQueries) {
+      try {
+        await executeQuery(sql);
+      } catch (e: any) {
+        console.warn('ALTER system_control note:', e.message);
+      }
+    }
+
     await executeQuery(`
-      ALTER TABLE system_control ADD COLUMN IF NOT EXISTS cooldown_minutes INTEGER NOT NULL DEFAULT 60;
-    `);
-    await executeQuery(`
-      ALTER TABLE system_control ADD COLUMN IF NOT EXISTS cooldown_enabled BOOLEAN NOT NULL DEFAULT true;
-    `);
-    await executeQuery(`
-      ALTER TABLE system_control ADD COLUMN IF NOT EXISTS cooldown_max_cycles INTEGER NOT NULL DEFAULT 1;
-    `);
-    await executeQuery(`
-      ALTER TABLE system_control ADD COLUMN IF NOT EXISTS cycle_count INTEGER NOT NULL DEFAULT 0;
-    `);
-    await executeQuery(`
-      ALTER TABLE system_control ADD COLUMN IF NOT EXISTS window_started_at TIMESTAMP WITH TIME ZONE;
-    `);
-    await executeQuery(`
-      ALTER TABLE system_control ADD COLUMN IF NOT EXISTS last_dosing_at TIMESTAMP WITH TIME ZONE;
-    `);
-    await executeQuery(`
-      INSERT INTO system_control (id, pump_mode, pump_state, target_ppm_min, target_ppm_max, cooldown_minutes, cooldown_enabled, cooldown_max_cycles)
-      VALUES ('default', 'auto', false, 560.0, 840.0, 60, true, 1)
+      INSERT INTO system_control (id, pump_mode, pump_state, target_ppm_min, target_ppm_max, cooldown_minutes, cooldown_enabled, cooldown_max_cycles, cycle_count)
+      VALUES ('default', 'auto', false, 560.0, 840.0, 60, true, 1, 0)
       ON CONFLICT (id) DO NOTHING;
     `);
   } catch (err: any) {
@@ -206,8 +211,8 @@ export async function getSystemControl(): Promise<SystemControl> {
     return mockDB.control;
   }
 
-  try {
-    const rows = await executeQuery<SystemControl>(
+  const queryControl = async () => {
+    const rows = await executeQuery<any>(
       `SELECT id, pump_mode, pump_state, target_ppm_min, target_ppm_max, 
               COALESCE(cooldown_minutes, 60) AS cooldown_minutes, 
               COALESCE(cooldown_enabled, true) AS cooldown_enabled,
@@ -219,9 +224,11 @@ export async function getSystemControl(): Promise<SystemControl> {
        WHERE id = 'default'
        LIMIT 1`
     );
-    if (rows.length > 0) {
+    if (rows && rows.length > 0) {
       return {
-        ...rows[0],
+        id: 'default',
+        pump_mode: (rows[0].pump_mode === 'manual' ? 'manual' : 'auto') as 'auto' | 'manual',
+        pump_state: Boolean(rows[0].pump_state),
         cooldown_minutes: Number(rows[0].cooldown_minutes ?? 60),
         target_ppm_min: Number(rows[0].target_ppm_min ?? 560),
         target_ppm_max: Number(rows[0].target_ppm_max ?? 840),
@@ -229,10 +236,21 @@ export async function getSystemControl(): Promise<SystemControl> {
         cooldown_max_cycles: Number(rows[0].cooldown_max_cycles ?? 1),
         cycle_count: Number(rows[0].cycle_count ?? 0),
         window_started_at: rows[0].window_started_at ? String(rows[0].window_started_at) : undefined,
+        last_dosing_at: rows[0].last_dosing_at ? String(rows[0].last_dosing_at) : undefined,
+        updated_at: rows[0].updated_at ? String(rows[0].updated_at) : undefined,
       };
     }
+    return null;
+  };
+
+  try {
+    const control = await queryControl();
+    if (control) return control;
 
     await ensureSchemaUpdated();
+    const retryControl = await queryControl();
+    if (retryControl) return retryControl;
+
     return {
       id: 'default',
       pump_mode: 'auto',
@@ -246,7 +264,13 @@ export async function getSystemControl(): Promise<SystemControl> {
     };
   } catch (error: any) {
     console.warn('Fallback getSystemControl schema check:', error.message);
-    await ensureSchemaUpdated();
+    try {
+      await ensureSchemaUpdated();
+      const retryControl = await queryControl();
+      if (retryControl) return retryControl;
+    } catch (e: any) {
+      console.warn('Second attempt getSystemControl failed:', e.message);
+    }
     return mockDB.control;
   }
 }
@@ -270,15 +294,26 @@ export async function updatePumpControl(params: {
 }): Promise<SystemControl> {
   const current = await getSystemControl();
   const newMode = params.mode ?? current.pump_mode ?? 'auto';
-  const newState = params.state !== undefined ? params.state : (current.pump_state ?? false);
-  const newMin = params.target_ppm_min !== undefined ? params.target_ppm_min : (current.target_ppm_min ?? 560);
-  const newMax = params.target_ppm_max !== undefined ? params.target_ppm_max : (current.target_ppm_max ?? 840);
-  const newCooldown = params.cooldown_minutes !== undefined ? params.cooldown_minutes : (current.cooldown_minutes ?? 60);
-  const newCooldownEnabled = params.cooldown_enabled !== undefined ? params.cooldown_enabled : (current.cooldown_enabled ?? true);
-  const newMaxCycles = params.cooldown_max_cycles !== undefined ? params.cooldown_max_cycles : (current.cooldown_max_cycles ?? 1);
-  const newCycleCount = params.reset_cooldown ? 0 : (params.cycle_count !== undefined ? params.cycle_count : (current.cycle_count ?? 0));
-  const newWindowStarted = params.reset_cooldown ? null : (params.window_started_at !== undefined ? params.window_started_at : current.window_started_at);
-  const newLastDosing = params.reset_cooldown ? null : (params.last_dosing_at !== undefined ? params.last_dosing_at : current.last_dosing_at);
+  const newState = params.state !== undefined ? Boolean(params.state) : (current.pump_state ?? false);
+  const newMin = params.target_ppm_min !== undefined ? Number(params.target_ppm_min) : (current.target_ppm_min ?? 560);
+  const newMax = params.target_ppm_max !== undefined ? Number(params.target_ppm_max) : (current.target_ppm_max ?? 840);
+  const newCooldown = params.cooldown_minutes !== undefined ? Number(params.cooldown_minutes) : (current.cooldown_minutes ?? 60);
+  const newCooldownEnabled = params.cooldown_enabled !== undefined ? Boolean(params.cooldown_enabled) : (current.cooldown_enabled ?? true);
+  const newMaxCycles = params.cooldown_max_cycles !== undefined ? Math.max(1, Number(params.cooldown_max_cycles)) : (current.cooldown_max_cycles ?? 1);
+  const newCycleCount = params.reset_cooldown ? 0 : (params.cycle_count !== undefined ? Number(params.cycle_count) : (current.cycle_count ?? 0));
+  
+  // Pastikan string ISO atau null murni (JANGAN PERNAH undefined)
+  const newWindowStarted = params.reset_cooldown 
+    ? null 
+    : (params.window_started_at !== undefined 
+        ? (params.window_started_at ? new Date(params.window_started_at).toISOString() : null)
+        : (current.window_started_at ? new Date(current.window_started_at).toISOString() : null));
+
+  const newLastDosing = params.reset_cooldown 
+    ? null 
+    : (params.last_dosing_at !== undefined 
+        ? (params.last_dosing_at ? new Date(params.last_dosing_at).toISOString() : null)
+        : (current.last_dosing_at ? new Date(current.last_dosing_at).toISOString() : null));
 
   if (!isDbConfigured()) {
     mockDB.control.pump_mode = newMode;
@@ -295,37 +330,61 @@ export async function updatePumpControl(params: {
     return mockDB.control;
   }
 
-  // Pastikan kolom schema terbaru ada di tabel
-  await ensureSchemaUpdated();
+  // Parameter yang dijamin 100% bebas 'undefined'
+  const queryParams = [
+    newMode,
+    newState,
+    newMin,
+    newMax,
+    newCooldown,
+    newCooldownEnabled,
+    newMaxCycles,
+    newCycleCount,
+    newWindowStarted,
+    newLastDosing
+  ];
 
-  // Gunakan UPSERT yang dijamin tidak pernah gagal
-  const rows = await executeQuery<SystemControl>(
-    `INSERT INTO system_control (id, pump_mode, pump_state, target_ppm_min, target_ppm_max, cooldown_minutes, cooldown_enabled, cooldown_max_cycles, cycle_count, window_started_at, last_dosing_at, updated_at)
-     VALUES ('default', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-     ON CONFLICT (id) DO UPDATE
-     SET pump_mode = EXCLUDED.pump_mode,
-         pump_state = EXCLUDED.pump_state,
-         target_ppm_min = EXCLUDED.target_ppm_min,
-         target_ppm_max = EXCLUDED.target_ppm_max,
-         cooldown_minutes = EXCLUDED.cooldown_minutes,
-         cooldown_enabled = EXCLUDED.cooldown_enabled,
-         cooldown_max_cycles = EXCLUDED.cooldown_max_cycles,
-         cycle_count = ${params.reset_cooldown ? '0' : 'EXCLUDED.cycle_count'},
-         window_started_at = ${params.reset_cooldown ? 'NULL' : 'COALESCE(EXCLUDED.window_started_at, system_control.window_started_at)'},
-         last_dosing_at = ${params.reset_cooldown ? 'NULL' : 'COALESCE(EXCLUDED.last_dosing_at, system_control.last_dosing_at)'},
-         updated_at = NOW()
-     RETURNING id, pump_mode, pump_state, target_ppm_min, target_ppm_max, cooldown_minutes, cooldown_enabled, cooldown_max_cycles, cycle_count, window_started_at, last_dosing_at, updated_at`,
-    [newMode, newState, newMin, newMax, newCooldown, newCooldownEnabled, newMaxCycles, newCycleCount, newWindowStarted, newLastDosing]
-  );
-
-  return {
-    ...rows[0],
-    cooldown_minutes: Number(rows[0].cooldown_minutes ?? 60),
-    target_ppm_min: Number(rows[0].target_ppm_min ?? 560),
-    target_ppm_max: Number(rows[0].target_ppm_max ?? 840),
-    cooldown_enabled: Boolean(rows[0].cooldown_enabled ?? true),
-    cooldown_max_cycles: Number(rows[0].cooldown_max_cycles ?? 1),
-    cycle_count: Number(rows[0].cycle_count ?? 0),
-    window_started_at: rows[0].window_started_at ? String(rows[0].window_started_at) : undefined,
+  const executeUpsert = async () => {
+    const rows = await executeQuery<any>(
+      `INSERT INTO system_control (id, pump_mode, pump_state, target_ppm_min, target_ppm_max, cooldown_minutes, cooldown_enabled, cooldown_max_cycles, cycle_count, window_started_at, last_dosing_at, updated_at)
+       VALUES ('default', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+       ON CONFLICT (id) DO UPDATE
+       SET pump_mode = EXCLUDED.pump_mode,
+           pump_state = EXCLUDED.pump_state,
+           target_ppm_min = EXCLUDED.target_ppm_min,
+           target_ppm_max = EXCLUDED.target_ppm_max,
+           cooldown_minutes = EXCLUDED.cooldown_minutes,
+           cooldown_enabled = EXCLUDED.cooldown_enabled,
+           cooldown_max_cycles = EXCLUDED.cooldown_max_cycles,
+           cycle_count = ${params.reset_cooldown ? '0' : 'EXCLUDED.cycle_count'},
+           window_started_at = ${params.reset_cooldown ? 'NULL' : 'COALESCE(EXCLUDED.window_started_at, system_control.window_started_at)'},
+           last_dosing_at = ${params.reset_cooldown ? 'NULL' : 'COALESCE(EXCLUDED.last_dosing_at, system_control.last_dosing_at)'},
+           updated_at = NOW()
+       RETURNING id, pump_mode, pump_state, target_ppm_min, target_ppm_max, cooldown_minutes, cooldown_enabled, cooldown_max_cycles, cycle_count, window_started_at, last_dosing_at, updated_at`,
+      queryParams
+    );
+    const r = rows[0];
+    return {
+      id: 'default',
+      pump_mode: (r.pump_mode === 'manual' ? 'manual' : 'auto') as 'auto' | 'manual',
+      pump_state: Boolean(r.pump_state),
+      cooldown_minutes: Number(r.cooldown_minutes ?? 60),
+      target_ppm_min: Number(r.target_ppm_min ?? 560),
+      target_ppm_max: Number(r.target_ppm_max ?? 840),
+      cooldown_enabled: Boolean(r.cooldown_enabled ?? true),
+      cooldown_max_cycles: Number(r.cooldown_max_cycles ?? 1),
+      cycle_count: Number(r.cycle_count ?? 0),
+      window_started_at: r.window_started_at ? String(r.window_started_at) : undefined,
+      last_dosing_at: r.last_dosing_at ? String(r.last_dosing_at) : undefined,
+      updated_at: r.updated_at ? String(r.updated_at) : undefined,
+    };
   };
+
+  try {
+    return await executeUpsert();
+  } catch (err: any) {
+    console.warn('First UPSERT attempt failed, running ensureSchemaUpdated:', err.message);
+    await ensureSchemaUpdated();
+    return await executeUpsert();
+  }
 }
